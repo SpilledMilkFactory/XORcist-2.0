@@ -1,6 +1,6 @@
 # XORcist 2.0
 
-**Portable IPv4/IPv6 network planning, opt-in network diagnostics and binary XOR transformations, written in C++20.**
+**Portable IPv4/IPv6 network planning, diagnostics, binary tools and authenticated file encryption, written in C++20.**
 
 A modern rewrite of the original 2019 Java class project. The core has no GUI dependencies; terminal and optional Dear ImGui frontends share the same tested implementations. This is a **development baseline**, not a hardened production release.
 
@@ -23,15 +23,18 @@ A modern rewrite of the original 2019 Java class project. The core has no GUI de
 | XOR hexadecimal bytes -> hex / escaped text | Yes | Yes | No control-sequence printing |
 | XOR binary file streaming | Yes | Yes | 64 KiB chunks, existing outputs never overwritten |
 | Recovery of 2019 Java `.dat` files | Yes | Yes | Java `writeUTF`, Base64, original first-key logic |
+| Base64/hex file encoders and decoders | Yes | Yes | Bounded binary-safe input, strict Base64 |
+| Binary file inspection, diff and bit masks | Yes | Yes | Hex/ASCII inspection, bounded diff output, byte operations |
+| Authenticated file encryption | Yes | Yes | OpenSSL 3.x AES-256-GCM, scrypt, versioned metadata, verified output |
 
-No Java, NetBeans, Qt, encryption dependencies, or elevated privileges are required.
+No Java, NetBeans, Qt, or elevated privileges are required. M3 requires OpenSSL 3.x `libcrypto` for authenticated encryption.
 
 ## Build on Debian 12/13 or Ubuntu 26.04
 
 CLI-only build and tests (does **not** fetch dependencies):
 
 ```bash
-sudo apt install build-essential cmake ninja-build
+sudo apt install build-essential cmake ninja-build libssl-dev
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DXORCIST_BUILD_GUI=OFF
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -41,7 +44,7 @@ ctest --test-dir build --output-on-failure
 GUI build (first configuration fetches **Dear ImGui v1.91.9b** at pinned commit `f5befd2d29e66809cd1110a152e375a7f1981f06` if a source directory is not specified):
 
 ```bash
-sudo apt install build-essential cmake ninja-build git libglfw3-dev libgl1-mesa-dev
+sudo apt install build-essential cmake ninja-build libssl-dev git libglfw3-dev libgl1-mesa-dev
 cmake -S . -B build-gui -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DXORCIST_BUILD_GUI=ON -DXORCIST_FETCH_GLFW=OFF
 cmake --build build-gui --parallel
@@ -54,7 +57,7 @@ The **CMake default deliberately leaves GUI off** so a headless server can build
 
 ### Windows build
 
-Use Visual Studio 2022 / CMake 3.20+ / Git, a supported C++20 MSVC toolchain, and either GLFW via vcpkg or the FetchContent fallback:
+Use Visual Studio 2022 / CMake 3.20+ / Git, a supported C++20 MSVC toolchain, OpenSSL 3.x (`OpenSSL::Crypto`, e.g. via vcpkg), and either GLFW via vcpkg or the FetchContent fallback. The following commands assume CMake can find the installed OpenSSL development package:
 
 ```powershell
 cmake -S . -B build-win -DCMAKE_BUILD_TYPE=Release -DXORCIST_BUILD_GUI=ON
@@ -232,3 +235,62 @@ linked or guarantee byte-identical cross-distro compilations.
 `workflow_dispatch` on `main` runs a gated CI signing job to produce Sigstore keyless bundles
 for all four candidates; the workflow does not publish a GitHub Release. Independent
 verification instructions are in the M0 acceptance document.
+
+
+## M3 — Robust data tools (development candidate)
+
+The original XOR commands remain educational and are **not secure encryption**.
+M3 introduces separate authenticated encryption using OpenSSL 3 (`libcrypto`).
+Install `libssl-dev` on Debian/Ubuntu before building the M3 source, even
+for CLI-only builds:
+
+```bash
+sudo apt install libssl-dev
+cmake -S . -B build-m3 -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+  -DXORCIST_BUILD_GUI=OFF -DXORCIST_BUILD_TESTS=ON
+cmake --build build-m3 --parallel
+ctest --test-dir build-m3 --output-on-failure
+```
+
+M3 adds `data` commands:
+
+```bash
+xorcist data base64 encode --in input.bin --out encoded.txt
+xorcist data base64 decode --in encoded.txt --out restored.bin
+xorcist data hex encode --in input.bin --out encoded.hex
+xorcist data hex decode --in encoded.hex --out restored.bin
+xorcist data inspect --in input.bin --limit 256
+xorcist data diff --left input.bin --right restored.bin --limit 32
+xorcist data mask --hex f0a5 --mask-hex 0ff0 --op and
+xorcist data bits --hex a5
+```
+
+Base64/hex file transforms are currently bounded to 16 MiB input size;
+`diff` streams the entire files in fixed-size buffers. Encodings do not
+provide confidentiality. Existing output paths are never overwritten.
+
+Secure file encryption (requires a strong passphrase of at least 12 bytes):
+
+```bash
+xorcist secure encrypt --in input.bin --out protected.xorc3
+xorcist secure decrypt --in protected.xorc3 --out restored.bin
+```
+
+When attached to a terminal, XORcist prompts with echo disabled. For a
+**trusted scripted input source** only, supply `--password-stdin` and pipe a
+passphrase securely without placing it into the process argument list.
+Avoid storing secrets in shell history or world-readable files.
+
+The container uses 64-byte authenticated metadata + ciphertext + 16-byte
+AES-256-GCM authentication tag, OpenSSL RNG, and scrypt key derivation.
+Decryption refuses wrong passwords and tampering before publishing a result.
+M3 fuzzers exercise strict encoded-data parsers and unauthenticated container-header layout validation.
+Intermediate plaintext is stored in a private temp file, which can remain
+after process crashes; see `SECURITY.md` for significant limitations.
+
+GUI adds **Data / Binary Tools** and **Authenticated Files** tabs. OpenSSL
+3 is an additional runtime dependency; on Windows the final portable ZIP
+will require explicit DLL/provider packaging and license review in M4.
+
+See [`docs/M3_ACCEPTANCE.md`](docs/M3_ACCEPTANCE.md) for local gates and
+[`docs/M3_FILE_FORMAT.md`](docs/M3_FILE_FORMAT.md) for the experimental envelope layout.

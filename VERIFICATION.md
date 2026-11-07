@@ -97,3 +97,29 @@ not a substitute for the user's Ubuntu GUI and end-to-end tests:
 
 Run the commands in [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md) to qualify M2 locally.
 No claim of full public release qualification is made here.
+
+
+## M3 development patch evidence — November 7, 2026
+
+Owner-side acceptance pending. This source adds OpenSSL 3.x libcrypto as a
+**new third-party runtime dependency**, and M3 development acceptance is
+separate from deferred M0/M4 cross-platform release qualification.
+
+M3 includes a versioned AES-256-GCM/scrypt file container, strict Base64,
+hexadecimal transforms, byte masks, binary/ASCII inspection and streamed
+file comparison. New tests cover RFC 4648 vectors, randomized round trips,
+wrong passwords, ciphertext/header/tag mutation, truncation, and absence of
+recovered output on failed authentication. It preserves M0–M2 tests and
+adds separate Base64/hex and envelope-layout libFuzzer harnesses.
+
+Assistant-side GCC 14.2.0 Debug CTest: **8/8 PASS**.
+Clang 17 ASan/UBSan Debug CTest: **8/8 PASS**.
+Bounded M3 data libFuzzer exercise: **300 runs, no findings**.
+GUI translation unit syntax with pinned ImGui headers and GLFW declaration stub:
+**PASS**; **full GUI link, launch and manual operations NOT tested here**.
+The M3 C++ regression suite includes a published AES-256-GCM NIST known-answer
+vector and scrypt-backed file round trips with tag/header/payload tampering.
+
+Local verification details and owner acceptance commands are described in
+`docs/M3_ACCEPTANCE.md`; do not mark the GUI or user Ubuntu environment as
+verified from assistant-side builds alone.
