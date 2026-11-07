@@ -9,14 +9,16 @@ It is inappropriate for credentials, production secrets, backups, or sensitive d
 * Repeating-key XOR leaks structure and enables plaintext recovery if an attacker knows or guesses data; it is not authenticated.
 * Keys passed via `--key-hex` can appear in shell history, process arguments and logs. GUI key fields are also not secret-management tools.
 * The program never generates or claims to generate strong random encryption keys.
-* The only data files read without an explicit output path are the legacy Java files, which are treated as untrusted input and size-limited to 16 MiB.
+* Legacy Java files are treated as untrusted input and size-limited to 16 MiB. The new network-list import reads only explicitly selected paths and limits inputs to 1 MiB. File conversion exclusively creates a new output and refuses overwrite.
 * XOR file outputs are exclusively created (never overwritten), opened mode 0600 on POSIX; incomplete outputs are deleted on detected read/write errors. The operating system still controls directory permissions and backups.
 * The CLI escapes control bytes when printing recovered legacy plaintext, to reduce terminal escape/injection risk.
-* Inputs are parsed with bounded CIDR prefixes and IPv4 octets. Network list files have a 1 MiB limit; GUI text buffers have explicit limits.
+* IPv4 octets, IPv6 hextets/compression and prefix lengths (/0..32 and /0..128) are validated. IPv6 scope/zone identifiers, noncanonical IPv4 leading-zero octets and multi-column/quoted CSV are rejected.
+* Network lists are limited to 1 MiB and 50,000 entries; GUI text buffers have explicit limits. `net split` limits output to 65,536 networks (GUI 1,024), VLSM accepts at most 4,096 named host requirements, and pairwise overlap reporting accepts at most 1,024 networks and 100,000 conflict pairs.
+* VLSM allocations are local calculations only. They do not create routes or manipulate network interfaces. Traditional usable-host counts reserve network and broadcast addresses, even for host counts that might otherwise be served by explicit /31 point-to-point links.
 
 ## Not in scope yet
 
-No secure encryption mode, file authentication, key custody, IPv6, network discovery, packet capture, privilege elevation, or active traffic interrogation is included in this baseline.
+No secure encryption mode, file authentication, key custody, IPv6 zone-aware interface routing, network discovery, packet capture, privilege elevation, or active traffic interrogation is included in this baseline.
 Before shipping a secure encryption feature, use a reviewed AEAD library such as OpenSSL EVP, libsodium, or platform cryptography; define key derivation, salt/nonce construction, metadata authentication, versioned file formats, error behavior, memory handling, and independent test vectors.
 
 ## Reporting vulnerabilities

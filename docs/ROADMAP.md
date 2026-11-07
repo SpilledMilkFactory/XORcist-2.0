@@ -17,6 +17,11 @@ see [`M0_ACCEPTANCE.md`](M0_ACCEPTANCE.md). Do not mark these gates as verified.
 
 ## M1 — IP planning
 
+**Status: implementation proposed for local testing.** Retain M0 quality gates,
+with full cross-platform verification deferred to release qualification.
+See [`M1_ACCEPTANCE.md`](M1_ACCEPTANCE.md).
+
+
 - IPv6 CIDR and range handling; fully distinguish IPv4 and IPv6.
 - CIDR overlap and intersection, address containment, and route covering checks.
 - Address-range -> minimum exact CIDR blocks; import/export CSV and newline formats.
