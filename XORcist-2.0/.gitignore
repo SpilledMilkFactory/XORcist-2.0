@@ -1,0 +1,33 @@
+# CMake / compiler outputs
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Testing/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+*.pdb
+*.dSYM/
+# Generated runtime data
+imgui.ini
+imgui_log.txt
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+# Sensitive or local user data (add fixtures only under tests/fixtures/)
+keys.dat
+cipherText.dat
+*.xor
+*.key
+
+# The deliberately synthetic compatibility fixtures are tracked.
+!tests/fixtures/keys.dat
+!tests/fixtures/cipherText.dat

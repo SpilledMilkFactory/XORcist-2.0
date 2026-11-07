@@ -1,0 +1,87 @@
+name: C++ CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-core:
+    name: CLI / tests (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [debian:12, debian:13, ubuntu:26.04]
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install toolchain
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates g++ cmake ninja-build
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DXORCIST_BUILD_GUI=OFF -DXORCIST_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: CLI smoke test
+        run: |
+          ./build/xorcist net summarize 192.168.1.1/24 192.168.2.1/24
+          ./build/xorcist xor text --text 'Hello!' --key-hex 010203
+
+  gui-compile:
+    name: GUI compile (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [debian:12, debian:13, ubuntu:26.04]
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates g++ cmake ninja-build libglfw3-dev libgl1-mesa-dev
+      - uses: actions/checkout@v4
+      - name: Configure GUI
+        run: cmake -S . -B build-gui -G Ninja -DCMAKE_BUILD_TYPE=Release -DXORCIST_BUILD_GUI=ON -DXORCIST_FETCH_GLFW=OFF
+      - name: Compile GUI and CLI
+        run: cmake --build build-gui --parallel 2
+      - name: Run headless core tests
+        run: ctest --test-dir build-gui --output-on-failure
+
+  windows-core:
+    name: Windows CLI / tests
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build-win -DXORCIST_BUILD_GUI=OFF -DXORCIST_BUILD_TESTS=ON
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-win --config Release --parallel 2
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir build-win -C Release --output-on-failure
+
+  windows-gui-compile:
+    name: Windows GUI compile / core tests
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure GUI (fetch pinned upstream ImGui and GLFW)
+        shell: pwsh
+        run: cmake -S . -B build-win-gui -DXORCIST_BUILD_GUI=ON -DXORCIST_FETCH_GLFW=ON
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-win-gui --config Release --parallel 2
+      - name: Core tests
+        shell: pwsh
+        run: ctest --test-dir build-win-gui -C Release --output-on-failure

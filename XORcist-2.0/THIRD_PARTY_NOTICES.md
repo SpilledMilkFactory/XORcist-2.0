@@ -1,0 +1,16 @@
+# Third-Party Notices — XORcist 2.0
+
+The core library and CLI have **no third-party runtime library dependencies** beyond the C++ runtime and operating system.
+The optional GUI uses:
+
+| Library | Pinned baseline | Role | License |
+|---|---|---|---|
+| Dear ImGui | v1.91.9b | UI rendering and widget behavior | MIT |
+| GLFW | 3.4 when fetched, or an OS-provided GLFW3 | Window / input / OpenGL context | zlib/libpng |
+| OpenGL | Platform implementation | GPU rendering | OS / driver supplied |
+
+The corresponding license text for Dear ImGui and GLFW is under `docs/licenses/`. When publishing a GUI installer/package, include these files or the equivalent notices from the **exact** bundled versions. If dynamically linking system GLFW, its distribution package may already provide the required notice; still retain credits in this project.
+
+If GLFW is supplied by the OS, its version and transitive dependencies may differ from the fetched fallback. A release must review the final dependency inventory and any platform-specific redistribution requirements. This notice file does **not** certify the compliance of any future release artifact.
+
+The MIT license in `LICENSE` applies to original XORcist 2.0 source code, not to third-party components.
