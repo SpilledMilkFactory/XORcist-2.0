@@ -18,7 +18,7 @@ It is inappropriate for credentials, production secrets, backups, or sensitive d
 
 ## Not in scope yet
 
-No secure encryption mode, file authentication, key custody, IPv6 zone-aware interface routing, network discovery, packet capture, privilege elevation, or active traffic interrogation is included in this baseline.
+No secure encryption mode, file authentication, key custody, IPv6 zone-aware interface routing, packet capture, privilege elevation, broad network discovery or scanning is included. M2 introduces opt-in single-endpoint TCP connection checks, which are active traffic but are not ICMP ping or a scan engine.
 Before shipping a secure encryption feature, use a reviewed AEAD library such as OpenSSL EVP, libsodium, or platform cryptography; define key derivation, salt/nonce construction, metadata authentication, versioned file formats, error behavior, memory handling, and independent test vectors.
 
 ## Reporting vulnerabilities
@@ -44,3 +44,30 @@ use a trusted working directory. It has not received a third-party security audi
 GUI smoke tests create a hidden OpenGL context and render two frames. They do not test a
 human-usable display or every GPU implementation. Windows runtimes, driver compatibility and
 portable packaging require separate evidence under `docs/M0_ACCEPTANCE.md`.
+
+## M2 DNS / inventory / TCP probe security boundaries
+
+* DNS A/AAAA lookups use the operating system resolver (`getaddrinfo`), and PTR uses
+  `getnameinfo`. Requests require explicit user action. DNS queries may be observable by
+  configured resolvers and upstream providers, subject to OS privacy policies. Results are
+  timestamped, not authenticated, and may be cached or changed; DNSSEC is not verified here.
+* System DNS APIs do **not** expose a portable deadline. OS resolver stalls may exceed
+  requested UI interaction times. The GUI dispatches queries off the rendering thread,
+  but shutdown while an async resolver is still running can wait for that operation.
+* Read-only local interfaces/routes can reveal private IP addresses, interface names,
+  default gateways, and routing configuration. Copying/saving or sharing CLI output may
+  expose sensitive network topology. Interface enumeration is not an authenticated
+  inventory and routing snapshots can omit policy rules and non-main tables.
+* TCP reachability requires a single **numeric** address and explicit destination port.
+  It cannot take hostname lists, CIDRs or broad ranges. Count 1..5, timeout 100..2000 ms,
+  interval 200..2000 ms, and a maximum configured budget of 10 seconds are validated.
+  Probe attempts make ordinary outbound TCP connections, which may be logged or trigger
+  monitoring on the selected host; only test hosts/ports you are authorized to access.
+  A `refused` connection indicates a refusal, not a successful application-level probe;
+  firewalls or OS/network behavior can make all outcomes ambiguous.
+* ACL output is a **Cisco-like address-match fragment only**, not a deployable firewall
+  command, a vetted device-specific ACL, or a policy correctness guarantee. Confirm
+  address order, protocol, action, direction, and target platform syntax independently.
+* Linux route inventory reads `/proc/net/route` and `/proc/net/ipv6_route`; systems without
+  these interfaces or with restricted visibility may report errors. Windows adapters/routes
+  use native OS APIs, but must be compiled and checked during deferred release qualification.

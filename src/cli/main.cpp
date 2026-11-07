@@ -1,3 +1,4 @@
+#include "diagnostics_cli.hpp"
 #include "planning_cli.hpp"
 // SPDX-License-Identifier: MIT
 #include "xorcist/legacy.hpp"
@@ -29,6 +30,14 @@ Usage:
   xorcist net split <IPv4-CIDR> <NEW-PREFIX>
   xorcist net vlsm <IPv4-CIDR> <LABEL=HOSTS>...
   xorcist net convert --in file --out file [--from lines|csv] [--to lines|csv]
+  xorcist diag dns <hostname> [--family any|v4|v6]
+  xorcist diag reverse <numeric-IP>
+  xorcist diag interfaces
+  xorcist diag routes
+  xorcist diag mask <IPv4-netmask>
+  xorcist diag wildcard <IPv4-wildcard>
+  xorcist diag acl <CIDR>
+  xorcist diag probe <numeric-IP> <TCP-port> [--count N] [--timeout-ms N] [--interval-ms N]
   xorcist xor text --text "Hello!" --key-hex 010203
   xorcist xor hex --hex 49666f --key-hex 010203
   xorcist xor file --in original.bin --out transformed.bin --key-hex 010203
@@ -74,6 +83,7 @@ int main(int argc, char** argv) {
         if (args.empty() || args[0] == "--help" || args[0] == "-h") { usage(std::cout); return 0; }
         const auto group = args[0];
         if (group == "net") return xorcist::cli::run_net(args);
+        if (group == "diag") return xorcist::cli::run_diag(args);
         if (group == "xor") {
             if (args.size() < 3) throw std::invalid_argument("expected xor text|hex|file");
             const auto action = args[1];
