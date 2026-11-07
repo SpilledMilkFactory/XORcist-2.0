@@ -4,6 +4,11 @@ The point of XORcist is utility, not replacing Wireshark. Avoid packet capture a
 
 ## M0 — Baseline completion and quality gates
 
+**Development status: COMPLETE (Ubuntu 26.04 local baseline, November 7, 2026).**
+The multi-platform and signed-release gates below are **deferred to release qualification**;
+see [`M0_ACCEPTANCE.md`](M0_ACCEPTANCE.md). Do not mark these gates as verified.
+
+
 - Rebuild current CLI and GUI from a fresh checkout on Debian 12, Debian 13, and Ubuntu 26.04.
 - Add Windows 10/11 package and GUI launch verification on real hardware.
 - Add sanitizer, fuzz, and property-based tests for CIDR parser and aggregation.

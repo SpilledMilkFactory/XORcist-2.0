@@ -107,10 +107,53 @@ docs/               Java audit, roadmap, third-party licenses
 * The original format's Java-only details are preserved in **decode-only** compatibility tooling.
 * IPv4 support exists today; IPv6 is a planned milestone, not currently supported.
 * No promise that a GUI binary built on a modern distro runs on Debian 12. Build and package for your **oldest supported target** when selecting a portable baseline, or release per-distro packages.
-* CI matrix builds are aspirational until actions run successfully in your repository. Current validated environment: local Debian 13 / GCC 14.2 / Ninja, CLI + core tests only.
+* CI matrix builds are aspirational until actions run successfully in your repository. Validated development environments: assistant-side Debian 13 / GCC 14.2 core tests; owner-side Ubuntu 26.04 / GCC 15.2.0 CLI and GUI tests and GUI launch.
 
 See [`SECURITY.md`](SECURITY.md), [`docs/2019_AUDIT.md`](docs/2019_AUDIT.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
 XORcist 2.0's original source code: MIT License, copyright 2026 Christopher Sutton. Dear ImGui and GLFW remain separately licensed; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and `docs/licenses/`.
+
+## M0 development qualification and candidate packages
+
+**M0 local development baseline accepted on Ubuntu 26.04 (November 7, 2026).**
+Cross-platform testing and signed release qualification remain deferred and unverified.
+Do not interpret candidate builds as a production release. See
+[`docs/M0_ACCEPTANCE.md`](docs/M0_ACCEPTANCE.md) for the pass/fail matrix, platform-specific
+verification steps, and outstanding hardware requirements.
+
+The CI build matrix tests Linux CLI + Dear ImGui GUI on Debian 12, Debian 13, and Ubuntu 26.04;
+builds a Windows x64 GUI/CLI candidate with MSVC; and runs Clang AddressSanitizer,
+UndefinedBehaviorSanitizer, deterministic CIDR property tests, and libFuzzer. The GUI has a
+hidden 2-frame smoke mode:
+
+```bash
+./build-gui/xorcist-gui --smoke-test
+```
+
+This must run with an OpenGL-capable display; use `xvfb-run -a` on headless Linux.
+
+For **pinned upstream GLFW** rather than the optional system package, build with:
+
+```bash
+cmake -S . -B build-m0 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DXORCIST_BUILD_GUI=ON -DXORCIST_BUILD_TESTS=ON \
+  -DXORCIST_USE_SYSTEM_GLFW=OFF -DXORCIST_FETCH_GLFW=ON
+cmake --build build-m0 --parallel
+ctest --test-dir build-m0 --output-on-failure
+cmake --install build-m0 --prefix stage-m0
+python3 scripts/package_candidate.py --stage stage-m0 --output-dir dist \
+  --platform local-linux-amd64 --format tar.gz
+python3 scripts/check_candidate.py dist/*.tar.gz
+```
+
+**Source dependency locks** reside in `cmake/dependencies.lock.cmake`.
+`package_candidate.py` emits a reproducible archive given identical staged bytes and
+`SOURCE_DATE_EPOCH`, embeds an SPDX 2.3 file inventory and dependency manifest, and generates
+an archive SHA-256 checksum file. This does **not** make runtime libraries fully statically
+linked or guarantee byte-identical cross-distro compilations.
+
+`workflow_dispatch` on `main` runs a gated CI signing job to produce Sigstore keyless bundles
+for all four candidates; the workflow does not publish a GitHub Release. Independent
+verification instructions are in the M0 acceptance document.

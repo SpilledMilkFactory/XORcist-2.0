@@ -13,6 +13,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -142,7 +143,12 @@ void draw(UI& ui) {
 }
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    const bool smoke = argc == 2 && std::string_view(argv[1]) == "--smoke-test";
+    if (argc > 1 && !smoke) {
+        std::cerr << "Usage: xorcist-gui [--smoke-test]\n";
+        return 2;
+    }
     glfwSetErrorCallback([](int code, const char* description) {
         std::cerr << "GLFW (" << code << "): " << description << '\n';
     });
@@ -150,6 +156,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if (smoke) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1050, 720, "XORcist 2.0", nullptr, nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
@@ -164,6 +171,7 @@ int main() {
         ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext(); glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
     UI ui;
+    unsigned frames = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         ImGui_ImplOpenGL3_NewFrame();
@@ -178,11 +186,13 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
+        if (smoke && ++frames >= 2) break;
     }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
+    if (smoke) std::cout << "PASS: GUI initialized, rendered two frames and shut down\n";
     return 0;
 }
