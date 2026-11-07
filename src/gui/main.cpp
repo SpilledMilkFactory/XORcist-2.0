@@ -3,6 +3,7 @@
 #include "xorcist/legacy.hpp"
 #include "xorcist/net.hpp"
 #include "xorcist/planning.hpp"
+#include "xorcist/diagnostics.hpp"
 #include "xorcist/xor.hpp"
 
 #include "imgui.h"
@@ -13,6 +14,9 @@
 #include <charconv>
 #include <cstdint>
 #include <exception>
+#include <future>
+#include <chrono>
+#include <functional>
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
@@ -48,6 +52,17 @@ struct UI {
     std::string xor_result;
     std::string file_result;
     std::string legacy_result;
+    char m2_host[256] = "localhost";
+    char m2_ip[128] = "127.0.0.1";
+    char m2_mask[64] = "255.255.255.0";
+    char m2_wildcard[64] = "0.0.0.255";
+    char m2_acl[128] = "192.0.2.5/24";
+    int m2_port = 443;
+    int m2_count = 2;
+    int m2_timeout = 500;
+    int m2_interval = 250;
+    std::future<std::string> m2_future;
+    std::string m2_result;
 };
 
 template <typename Action> void safe_run(std::string& result, Action&& action) {
@@ -57,7 +72,26 @@ template <typename Action> void safe_run(std::string& result, Action&& action) {
 void show_text(const std::string& text) {
     if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
 }
+template <typename Fn> void launch_diagnostic(UI& ui, Fn action) {
+    if (ui.m2_future.valid()) return;
+    ui.m2_result = "Query running...";
+    ui.m2_future = std::async(std::launch::async, [action = std::move(action)]() mutable {
+        try { return action(); }
+        catch (const std::exception& error) { return std::string("Error: ") + error.what(); }
+    });
+}
+void diagnostics_result(UI& ui) {
+    if (ui.m2_future.valid()) ImGui::TextUnformatted("Working... (OS DNS queries may take time)");
+    if (!ui.m2_result.empty() && ImGui::Button("Copy diagnostics result"))
+        ImGui::SetClipboardText(ui.m2_result.c_str());
+    ImGui::BeginChild("Diagnostic output", ImVec2(0, 185), true);
+    ImGui::TextUnformatted(ui.m2_result.c_str());
+    ImGui::EndChild();
+}
 void draw(UI& ui) {
+    if (ui.m2_future.valid() &&
+        ui.m2_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        ui.m2_result = ui.m2_future.get();
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -221,6 +255,78 @@ void draw(UI& ui) {
                 });
             }
             show_text(ui.import_result);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("M2 DNS / System")) {
+            ImGui::TextWrapped("System DNS resolver; responses are timestamped, not authoritative DNS diagnostics. Read-only OS interface and route snapshots.");
+            ImGui::InputText("DNS name", ui.m2_host, sizeof(ui.m2_host));
+            if (ImGui::Button("Resolve A + AAAA") && !ui.m2_future.valid()) {
+                const std::string host(ui.m2_host);
+                launch_diagnostic(ui, [host] { return xorcist::diagnostics::format(xorcist::diagnostics::lookup(host)); });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("IPv4 only") && !ui.m2_future.valid()) {
+                const std::string host(ui.m2_host);
+                launch_diagnostic(ui, [host] { return xorcist::diagnostics::format(xorcist::diagnostics::lookup(host, xorcist::diagnostics::AddressFamily::IPv4)); });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("IPv6 only") && !ui.m2_future.valid()) {
+                const std::string host(ui.m2_host);
+                launch_diagnostic(ui, [host] { return xorcist::diagnostics::format(xorcist::diagnostics::lookup(host, xorcist::diagnostics::AddressFamily::IPv6)); });
+            }
+            ImGui::InputText("Reverse IP", ui.m2_ip, sizeof(ui.m2_ip));
+            if (ImGui::Button("Reverse PTR") && !ui.m2_future.valid()) {
+                const std::string ip(ui.m2_ip);
+                launch_diagnostic(ui, [ip] { return xorcist::diagnostics::format(xorcist::diagnostics::reverse(ip)); });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("List interfaces") && !ui.m2_future.valid())
+                launch_diagnostic(ui, [] { return xorcist::diagnostics::format(xorcist::diagnostics::interfaces()); });
+            ImGui::SameLine();
+            if (ImGui::Button("List routes") && !ui.m2_future.valid())
+                launch_diagnostic(ui, [] { return xorcist::diagnostics::format(xorcist::diagnostics::routes()); });
+            diagnostics_result(ui);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("M2 Masks / ACL")) {
+            ImGui::TextWrapped("Contiguous IPv4 netmask/wildcard conversion. ACL output is a Cisco-like match fragment, NOT a complete policy rule.");
+            ImGui::InputText("Netmask", ui.m2_mask, sizeof(ui.m2_mask));
+            if (ImGui::Button("Convert netmask") && !ui.m2_future.valid()) safe_run(ui.m2_result, [&] {
+                return xorcist::diagnostics::format(xorcist::diagnostics::mask_from_netmask(ui.m2_mask));
+            });
+            ImGui::InputText("Wildcard", ui.m2_wildcard, sizeof(ui.m2_wildcard));
+            if (ImGui::Button("Convert wildcard") && !ui.m2_future.valid()) safe_run(ui.m2_result, [&] {
+                return xorcist::diagnostics::format(xorcist::diagnostics::mask_from_wildcard(ui.m2_wildcard));
+            });
+            ImGui::InputText("CIDR for ACL match", ui.m2_acl, sizeof(ui.m2_acl));
+            if (ImGui::Button("Generate ACL match") && !ui.m2_future.valid()) safe_run(ui.m2_result, [&] {
+                return std::string("Cisco-like match fragment: ") + xorcist::diagnostics::acl_match(ui.m2_acl);
+            });
+            diagnostics_result(ui);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("M2 TCP Reachability")) {
+            ImGui::TextWrapped("Explicit TCP connect to ONE numeric address and port; not ICMP ping. No host discovery or subnet scanning. Maximum 5 connections and 10s configured budget.");
+            ImGui::InputText("Numeric IPv4/IPv6", ui.m2_ip, sizeof(ui.m2_ip));
+            ImGui::InputInt("TCP port", &ui.m2_port);
+            ImGui::InputInt("Attempts (1..5)", &ui.m2_count);
+            ImGui::InputInt("Timeout ms (100..2000)", &ui.m2_timeout);
+            ImGui::InputInt("Interval ms (200..2000)", &ui.m2_interval);
+            if (ImGui::Button("Probe explicitly selected endpoint") && !ui.m2_future.valid()) {
+                const std::string ip(ui.m2_ip);
+                const int port = ui.m2_port, count = ui.m2_count;
+                const int timeout = ui.m2_timeout, interval = ui.m2_interval;
+                launch_diagnostic(ui, [ip, port, count, timeout, interval] {
+                    if (port < 1 || port > 65535 || count < 1 || count > 5 ||
+                        timeout < 100 || timeout > 2000 || interval < 200 || interval > 2000)
+                        throw std::invalid_argument("port/count/timeout/interval outside permitted range");
+                    const xorcist::diagnostics::ProbeOptions config{
+                        static_cast<std::uint16_t>(port), static_cast<unsigned>(count),
+                        static_cast<unsigned>(timeout), static_cast<unsigned>(interval)};
+                    return xorcist::diagnostics::format(xorcist::diagnostics::probe_tcp_numeric(ip, config));
+                });
+            }
+            diagnostics_result(ui);
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("XOR Text / Hex")) {

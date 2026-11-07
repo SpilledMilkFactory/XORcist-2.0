@@ -17,7 +17,7 @@ see [`M0_ACCEPTANCE.md`](M0_ACCEPTANCE.md). Do not mark these gates as verified.
 
 ## M1 — IP planning
 
-**Status: implementation proposed for local testing.** Retain M0 quality gates,
+**Development status: COMPLETE for Ubuntu 26.04 local verification (November 7, 2026).** Retain M0 quality gates,
 with full cross-platform verification deferred to release qualification.
 See [`M1_ACCEPTANCE.md`](M1_ACCEPTANCE.md).
 
@@ -28,6 +28,10 @@ See [`M1_ACCEPTANCE.md`](M1_ACCEPTANCE.md).
 - IPv4 subnet splitting, VLSM planning and allocation, overlap warnings.
 
 ## M2 — Passive diagnostics / administration
+
+**Status: M2 implementation ready for local validation; release-platform checks deferred.**
+See [`M2_ACCEPTANCE.md`](M2_ACCEPTANCE.md). System inventory is read-only; bounded TCP probes are opt-in.
+
 
 - DNS lookup / reverse lookup using system resolvers, timestamped result inspection.
 - Local interface, addresses, routes, MTU and gateway inventory using OS APIs.

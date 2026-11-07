@@ -1,6 +1,6 @@
 # XORcist 2.0
 
-**Portable IPv4/IPv6 network planning and binary XOR transformations, written in C++20.**
+**Portable IPv4/IPv6 network planning, opt-in network diagnostics and binary XOR transformations, written in C++20.**
 
 A modern rewrite of the original 2019 Java class project. The core has no GUI dependencies; terminal and optional Dear ImGui frontends share the same tested implementations. This is a **development baseline**, not a hardened production release.
 
@@ -121,14 +121,52 @@ xorcist legacy-decrypt --keys ./keys.dat --cipher ./cipherText.dat
 xorcist legacy-decrypt --keys ./keys.dat --cipher ./cipherText.dat --out recovered.txt
 ```
 
+## M2 — Passive diagnostics and administrative helpers (development patch)
+
+M2 adds read-only network inventory, **system-resolver** A/AAAA resolution and reverse PTR lookup,
+IPv4 mask/wildcard conversions, and Cisco-like ACL match fragments. Local network observation
+is not a packet capture or a remote scan. The timestamp is UTC observation time rather than
+DNS answer TTL, server provenance or a guaranteed DNS query timeout.
+
+```bash
+./build/xorcist diag dns localhost --family v4
+./build/xorcist diag reverse 127.0.0.1
+./build/xorcist diag interfaces
+./build/xorcist diag routes
+./build/xorcist diag mask 255.255.255.0
+./build/xorcist diag wildcard 0.0.0.255
+./build/xorcist diag acl 192.0.2.42/24
+./build/xorcist diag probe 127.0.0.1 443 --count 2 --timeout-ms 500 --interval-ms 250
+```
+
+**TCP reachability is NOT ICMP ping.** A refused connection is reported separately from
+connected, timeout and error, and does not imply application availability. The tool only
+accepts a **numeric IPv4/IPv6 address** and an **explicit TCP port** for probes; resolve names
+separately to select the target. Each invocation targets one endpoint, permits at most five
+attempts, enforces a 100–2000 ms per-attempt timeout and 200–2000 ms inter-attempt interval,
+and rejects a combined configured probe budget over 10 seconds. Scheduler delays may make
+wall time slightly longer. No privileged network operations, discovery sweeps or packet capture.
+
+The GUI gains three **M2** tabs. DNS, reverse DNS, system inventory and TCP probes run on
+an asynchronous worker to keep the GUI responsive; a pending system DNS lookup may still
+delay application shutdown because the platform resolver provides no portable hard deadline.
+
+Linux uses `getifaddrs`, `SIOCGIFMTU` and read-only `/proc/net/{route,ipv6_route}` to collect
+addresses, MTUs, route prefixes, gateways and metrics. Windows code paths use
+`GetAdaptersAddresses` and `GetIpForwardTable2` (not yet Windows-build verified). Routes
+reflect a snapshot of the host namespace and may omit policy-routing tables, VPN overlays,
+or other platform-specific routing metadata; they are not authoritative for a given flow.
+
+See [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md) for local verification and limitations.
+
 ## Source tree
 
 ```text
 include/xorcist/     Public cross-platform C++ core APIs
-src/core/           IPv4/IPv6 planning, binary XOR, file streaming, legacy Java importer
-src/cli/            Scriptable terminal frontend (planning_cli.cpp)
+src/core/           IPv4/IPv6 planning, OS diagnostics, XOR, file streaming, legacy importer
+src/cli/            Scriptable terminal frontend (planning_cli.cpp, diagnostics_cli.cpp)
 src/gui/            Optional Dear ImGui + GLFW + OpenGL3 frontend
-tests/              Baseline regression + M1 deterministic property tests and CLI integration
+tests/              M0/M1 regression, M2 diagnostics and subprocess integration tests
 docs/               Java audit, roadmap, third-party licenses
 .github/workflows/  Debian/Ubuntu, Windows and GUI compile CI
 ```
@@ -143,10 +181,10 @@ docs/               Java audit, roadmap, third-party licenses
 * VLSM is IPv4 only, reserves network and broadcast addresses when estimating usable host capacity, places largest subnets first, and refuses requests that do not fit. It does not configure live routes or interfaces.
 * `net split` is bounded to at most 65,536 networks in the CLI (1,024 in the GUI); overlap warnings are bounded to 1,024 input networks. Files are limited to 1 MiB / 50,000 entries.
 * No promise that a GUI binary built on a modern distro runs on Debian 12. Build and package for your **oldest supported target** when selecting a portable baseline, or release per-distro packages.
-* M1 C++ core and CLI have been verified locally on Debian 13 / GCC 14.2.0, including the existing tests, a new IPv4/IPv6 planning suite, and subprocess CLI tests. The M1 GUI source passed a translation-unit syntax check using Dear ImGui headers and stub GLFW declarations; full GUI linking and runtime tests remain outstanding.
-* The uploaded post-M0 project still lacks documented evidence of the M0 fuzzing, SBOM/signature, reproducibility, Debian/Windows CI and hardware gates. A GitHub commit is not release sign-off.
+* M1 passed the user's Ubuntu 26.04 / GCC 15.2.0 CLI (4/4) and GUI (5/5) tests, including the hidden-window smoke; M2 local GUI validation remains pending.
+* M0/M1 are accepted for the local Ubuntu 26.04 development scope. Debian/Windows hardware, distribution verification, signed release artifacts and third-party dependency qualification remain deferred release gates. A GitHub commit is not release sign-off.
 
-See [`SECURITY.md`](SECURITY.md), [`docs/2019_AUDIT.md`](docs/2019_AUDIT.md), [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
+See [`SECURITY.md`](SECURITY.md), [`docs/2019_AUDIT.md`](docs/2019_AUDIT.md), [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md), [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 

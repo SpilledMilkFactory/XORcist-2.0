@@ -73,3 +73,27 @@ The results below pertain to the **proposed M1 patch**, not to an accepted relea
 | M0 development quality gates | IMPLEMENTED; locally accepted | Release qualification remains deferred per `docs/M0_ACCEPTANCE.md` |
 
 See [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md) for precise manual checks and the M0/M1 separation.
+
+## M2 proposed implementation verification — November 7, 2026
+
+M1 was reported passing on Ubuntu 26.04 GCC 15.2.0: CLI 4/4 CTest, GUI 5/5 CTest,
+and the hidden-window GUI smoke test. This closes **M1 local development scope** only.
+
+The following M2 evidence comes from the assistant's Linux execution environment and is
+not a substitute for the user's Ubuntu GUI and end-to-end tests:
+
+| Check | Result | Context |
+|---|---|---|
+| Core + M2 CLI compilation | PASS | GCC C++20, Ninja, Debug |
+| M0/M1/M2 CTest suites | PASS | 6/6 (existing tests retained) |
+| Mask/wildcard round-trip and invalid inputs | PASS | 33 prefix values + negative tests |
+| Host validation, loopback TCP probe limits | PASS | No external network target required |
+| Local OS interface/route inventory | PASS | Linux `/proc` and socket APIs |
+| Clang ASan/UBSan | PASS | Instrumented 6/6 CTest suites |
+| Dear ImGui GUI translation-unit syntax | PASS (limited) | Pinned ImGui headers + GLFW declaration stub; not full link |
+| Full GUI build, CTest smoke, manual diagnostics tabs | PENDING | User Ubuntu 26.04 test needed |
+| Windows API build and native behavior | NOT VERIFIED | Deferred release gate |
+| Debian 12/13 and other Linux distributions | NOT VERIFIED | Deferred release gate |
+
+Run the commands in [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md) to qualify M2 locally.
+No claim of full public release qualification is made here.
