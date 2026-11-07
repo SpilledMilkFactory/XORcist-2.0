@@ -76,7 +76,7 @@ std::string hex_encode(std::span<const std::byte> data) {
 Bytes to_bytes(std::string_view text) {
     Bytes bytes;
     bytes.reserve(text.size());
-    for (unsigned char b : text) bytes.push_back(static_cast<std::byte>(b));
+    for (char ch : text) bytes.push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
     return bytes;
 }
 std::string escaped_text(std::span<const std::byte> data) {

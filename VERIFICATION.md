@@ -1,41 +1,53 @@
-# Verification Report — XORcist 2.0 development baseline
+# XORcist verification — M0 qualification patch (development evidence)
 
-Date: November 6, 2026 (local task environment)
+**M0 local development scope: ACCEPTED (November 7, 2026).**
+Cross-platform and signed release gates: **DEFERRED; NOT CERTIFIED**.
 
-| Evidence | Observed result | Scope |
+## Owner-side Ubuntu 26.04 local verification (GCC 15.2.0)
+
+| Check | Owner's reported outcome |
+|---|---|
+| CLI Debug configure/build | PASS |
+| Core + property CTest | 2/2 PASS |
+| GUI Release configure/build | PASS (19/19) |
+| GUI smoke + core + properties CTest | 3/3 PASS |
+| GUI hidden 2-frame smoke | PASS; printed expected success message |
+| Interactive GUI | Launched; full widget-by-widget inspection not recorded |
+| Local sanitizer/fuzzer/candidate tooling | Owner reports checks passed; raw logs not supplied |
+| Debian 12/13, Ubuntu 24.04, Windows 10/11, signing | Deferred to release qualification |
+
+This scope decision is documented in `docs/M0_ACCEPTANCE.md`.
+
+
+## Verified in the assistant's execution environment (not your local machine)
+
+| Check | Result | Context |
 |---|---|---|
-| CMake configure | PASS | Debian 13, CMake/Ninja, GCC 14.2.0 |
-| C++20 core build | PASS | `xorcist_core` |
-| CLI build | PASS | `xorcist` |
-| Core CTest suite | PASS | IPv4 parsing, supernet/collapse, invalid input, byte/file XOR, legacy import |
-| ASan+UBSan compile and CTest | PASS | GCC 14.2.0 Debug; core/CLI/test target |
-| CLI supernet smoke test | PASS | 3 networks -> `192.168.0.0/22` |
-| XOR text/hex smoke test | PASS | `Hello!` -> `49676f6d6d22` -> `Hello!` |
-| Legacy decoding of original 2019 `.dat` files | PASS | Recovers `here is some text I will encrypt` |
-| Dear ImGui GUI compile or launch | NOT RUN | Original dependencies unavailable in this execution environment |
-| Debian 12 and Ubuntu 26.04 CI | NOT RUN | Workflow supplied, awaiting repository Actions execution |
-| Windows 10/11 core and GUI | NOT RUN | GUI compilation workflow supplied but not yet run; manual launch test required |
-| Debian/Windows release packaging | NOT IMPLEMENTED | Future release milestone |
+| C++ core + CLI + unit tests | PASS | Debian 13, GCC 14.2.0, CMake 3.31.6, Ninja |
+| Deterministic CIDR property test | PASS | 6,000 seeded cases, 256-address independent oracle per case |
+| Core regression CTest | PASS | Existing compatibility and XOR suite |
+| AddressSanitizer + UndefinedBehaviorSanitizer | PASS | Clang 17.0.0 instrumented core/tests |
+| Source-instrumented libFuzzer | PASS | 3,000 corpus-seeded runs of CIDR parser/aggregation |
+| Candidate archive + SPDX verifier | PASS | Debian 13 CLI staged install; all listed file hashes matched |
+| Identical-stage packaging determinism | PASS | Two `.tar.gz` files had identical SHA-256 |
+| Dear ImGui GUI compile / hidden frame smoke | NOT RUN | GLFW/OpenGL development dependencies unavailable in this sandbox |
+| Debian 12, Debian 13, Ubuntu 26.04 GitHub Actions | PENDING | Source workflows added; must run on user's repository |
+| Windows MSVC GUI build and candidate ZIP | PENDING | GitHub Actions run required |
+| Windows 10 AND 11 real hardware verification | PENDING | Manual evidence required |
+| Signed candidate archives | PENDING | Explicit manual `workflow_dispatch` on main required |
+| Final release signing and promotion | BLOCKED | Must pass M0 acceptance gates first |
 
-## Reproduce core checks
+### Core test evidence
 
-```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DXORCIST_BUILD_GUI=OFF
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-./build/xorcist net summarize 192.168.1.1/24 192.168.2.1/24 192.168.3.1/24
-./build/xorcist xor text --text 'Hello!' --key-hex 010203
-./build/xorcist xor hex --hex 49676f6d6d22 --key-hex 010203
-```
+`ctest --test-dir ... --output-on-failure` (GCC 14.2): 2/2 passed.
+`ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 ctest ...` (Clang 17): 2/2 passed.
+Fuzz harness: 3,000 seeded iterations; no sanitizer findings in this bounded exercise.
 
-## Reproduce sanitizer checks (GCC/Clang Linux)
+### Candidate evidence
 
-```bash
-cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-    -DXORCIST_BUILD_GUI=OFF -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -fno-omit-frame-pointer -O1' \
-    -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address,undefined'
-cmake --build build-asan --parallel
-ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure
-```
+An unchanged staged CLI install was packaged twice with the same environment and
+`SOURCE_DATE_EPOCH` default of `0`; archives produced identical SHA-256 digests.
+`check_candidate.py` validated SHA-256 digests, both JSON structures, and 12 staged file hashes.
 
-This is a development-stage verification report, not a cross-platform release certification. The bundled GUI is source code whose compilation still requires follow-up validation.
+These tests cannot substitute for user-side clean checkout, CI platform matrix, actual GUI
+interaction or real Windows 10/11 hardware testing. Follow `docs/M0_ACCEPTANCE.md`.

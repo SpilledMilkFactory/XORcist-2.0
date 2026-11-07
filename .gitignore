@@ -31,3 +31,14 @@ cipherText.dat
 # The deliberately synthetic compatibility fixtures are tracked.
 !tests/fixtures/keys.dat
 !tests/fixtures/cipherText.dat
+
+# M0 candidate packaging / local fuzz corpus
+stage-*/
+dist/
+build-m0*/
+*.profraw
+*.profdata
+crash-*
+leak-*
+timeout-*
+build-m0-corpus/
