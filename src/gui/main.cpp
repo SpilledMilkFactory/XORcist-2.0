@@ -2,6 +2,7 @@
 // Dear ImGui + GLFW + OpenGL3 frontend: ALL domain logic remains in xorcist_core.
 #include "xorcist/legacy.hpp"
 #include "xorcist/net.hpp"
+#include "xorcist/planning.hpp"
 #include "xorcist/xor.hpp"
 
 #include "imgui.h"
@@ -9,7 +10,10 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 
+#include <charconv>
+#include <cstdint>
 #include <exception>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -19,6 +23,17 @@
 namespace {
 struct UI {
     char networks[8192] = "192.168.1.1/24\n192.168.2.1/24\n192.168.3.1/24";
+    char relation_a[128] = "2001:db8::/32";
+    char relation_b[128] = "2001:db8:100::/40";
+    char relation_ip[128] = "2001:db8::1";
+    char range_first[128] = "2001:db8::";
+    char range_last[128] = "2001:db8::f";
+    char vlsm_parent[128] = "10.0.0.0/24";
+    char split_prefix[8] = "26";
+    char vlsm_requests[4096] = "lan=50\nwifi=20\niot=5";
+    char list_input[1024] = "networks.txt";
+    char list_output[1024] = "networks.csv";
+    int list_from = 0, list_to = 1;
     char text[8192] = "Hello, XORcist 2.0!";
     char hex[16384] = "";
     char key[4096] = "010203";
@@ -27,6 +42,9 @@ struct UI {
     char legacy_keys[1024] = "keys.dat";
     char legacy_cipher[1024] = "cipherText.dat";
     std::string network_result;
+    std::string relation_result;
+    std::string allocation_result;
+    std::string import_result;
     std::string xor_result;
     std::string file_result;
     std::string legacy_result;
@@ -48,36 +66,161 @@ void draw(UI& ui) {
     ImGui::TextUnformatted("XORcist 2.0 | Network planning + binary transformations");
     ImGui::Separator();
     if (ImGui::BeginTabBar("tools")) {
-        if (ImGui::BeginTabItem("IPv4 / CIDR")) {
-            ImGui::TextWrapped("Enter CIDR networks, one per line or whitespace separated. # starts a comment.");
+        if (ImGui::BeginTabItem("CIDR / IPv6")) {
+            ImGui::TextWrapped("IPv4 and IPv6 networks: one per line or separated by whitespace. # starts a comment. Aggregation requires a single address family.");
             ImGui::InputTextMultiline("Networks", ui.networks, sizeof(ui.networks), ImVec2(-1, 170));
             if (ImGui::Button("Smallest enclosing supernet")) {
                 safe_run(ui.network_result, [&] {
-                    const auto nets = xorcist::net::parse_network_list(ui.networks);
-                    const auto n = xorcist::net::enclosing_supernet(nets);
-                    return "Supernet: " + n.cidr() + "\nMask: " + xorcist::net::format_ipv4(n.mask()) +
-                           "\nNote: one supernet may include addresses outside the inputs.";
+                    const auto nets = xorcist::planning::parse_list(ui.networks, xorcist::planning::ListFormat::Lines);
+                    const auto n = xorcist::planning::enclosing(nets);
+                    return "Supernet: " + n.str() + "\nNote: a supernet may include extra addresses.";
                 });
             }
             ImGui::SameLine();
-            if (ImGui::Button("Exact CIDR aggregation")) {
+            if (ImGui::Button("Exact aggregation")) {
                 safe_run(ui.network_result, [&] {
-                    const auto nets = xorcist::net::collapse(xorcist::net::parse_network_list(ui.networks));
-                    std::string result = "Exact union (no extra IPs):\n";
-                    for (const auto& net : nets) result += net.cidr() + "\n";
+                    const auto nets = xorcist::planning::collapse(
+                        xorcist::planning::parse_list(ui.networks, xorcist::planning::ListFormat::Lines));
+                    return xorcist::planning::serialize_list(nets, xorcist::planning::ListFormat::Lines);
+                });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Inspect first")) {
+                safe_run(ui.network_result, [&] {
+                    const auto nets = xorcist::planning::parse_list(ui.networks, xorcist::planning::ListFormat::Lines);
+                    if (nets.empty()) throw std::invalid_argument("provide a network");
+                    return xorcist::planning::inspect(nets.front());
+                });
+            }
+            if (ImGui::Button("Check overlaps")) {
+                safe_run(ui.network_result, [&] {
+                    const auto nets = xorcist::planning::parse_list(ui.networks, xorcist::planning::ListFormat::Lines);
+                    const auto pairs = xorcist::planning::conflicts(nets);
+                    if (pairs.empty()) return std::string("No overlapping networks found.");
+                    std::string result;
+                    for (const auto& [a, b] : pairs)
+                        result += nets[a].str() + " overlaps " + nets[b].str() + "\n";
                     return result;
                 });
             }
+            ImGui::Separator();
+            if (!ui.network_result.empty() && ImGui::Button("Copy network result"))
+                ImGui::SetClipboardText(ui.network_result.c_str());
+            show_text(ui.network_result);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Relations / Ranges")) {
+            ImGui::TextWrapped("Use CIDR blocks for overlap, intersection and route coverage. Ranges use inclusive host IP endpoints.");
+            ImGui::InputText("CIDR A", ui.relation_a, sizeof(ui.relation_a));
+            ImGui::InputText("CIDR B", ui.relation_b, sizeof(ui.relation_b));
+            ImGui::InputText("IP address", ui.relation_ip, sizeof(ui.relation_ip));
+            if (ImGui::Button("A overlaps B")) {
+                safe_run(ui.relation_result, [&] {
+                    return xorcist::planning::overlaps(xorcist::planning::parse_cidr(ui.relation_a),
+                        xorcist::planning::parse_cidr(ui.relation_b)) ? std::string("yes") : std::string("no");
+                });
+            }
             ImGui::SameLine();
-            if (ImGui::Button("Inspect first network")) {
-                safe_run(ui.network_result, [&] {
-                    const auto nets = xorcist::net::parse_network_list(ui.networks);
-                    if (nets.empty()) throw std::invalid_argument("provide at least one network");
-                    return xorcist::net::inspect(nets.front());
+            if (ImGui::Button("Intersection")) {
+                safe_run(ui.relation_result, [&] {
+                    const auto x = xorcist::planning::intersection(xorcist::planning::parse_cidr(ui.relation_a),
+                        xorcist::planning::parse_cidr(ui.relation_b));
+                    return x ? x->str() : std::string("none");
+                });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("A covers B")) {
+                safe_run(ui.relation_result, [&] {
+                    return xorcist::planning::covers(xorcist::planning::parse_cidr(ui.relation_a),
+                        xorcist::planning::parse_cidr(ui.relation_b)) ? std::string("yes") : std::string("no");
+                });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("A contains IP")) {
+                safe_run(ui.relation_result, [&] {
+                    return xorcist::planning::contains(xorcist::planning::parse_cidr(ui.relation_a),
+                        xorcist::planning::parse_address(ui.relation_ip)) ? std::string("yes") : std::string("no");
                 });
             }
             ImGui::Separator();
-            show_text(ui.network_result);
+            ImGui::InputText("Range first IP", ui.range_first, sizeof(ui.range_first));
+            ImGui::InputText("Range last IP", ui.range_last, sizeof(ui.range_last));
+            if (ImGui::Button("Range to exact CIDRs")) {
+                safe_run(ui.relation_result, [&] {
+                    return xorcist::planning::serialize_list(
+                        xorcist::planning::range_to_cidrs(xorcist::planning::parse_range(
+                            ui.range_first, ui.range_last)), xorcist::planning::ListFormat::Lines);
+                });
+            }
+            ImGui::Separator();
+            if (!ui.relation_result.empty() && ImGui::Button("Copy relation result"))
+                ImGui::SetClipboardText(ui.relation_result.c_str());
+            show_text(ui.relation_result);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("IPv4 Split / VLSM")) {
+            ImGui::TextWrapped("Split a parent subnet, or allocate IPv4 blocks for conventional usable host counts (network/broadcast reserved). Largest request is placed first.");
+            ImGui::InputText("Parent CIDR", ui.vlsm_parent, sizeof(ui.vlsm_parent));
+            ImGui::InputText("New prefix", ui.split_prefix, sizeof(ui.split_prefix));
+            if (ImGui::Button("Split parent")) {
+                safe_run(ui.allocation_result, [&] {
+                    const std::string_view s(ui.split_prefix);
+                    unsigned value = 0;
+                    const auto [p, ec] = std::from_chars(s.data(), s.data() + s.size(), value);
+                    if (ec != std::errc{} || p != s.data() + s.size() || value > 32)
+                        throw std::invalid_argument("new prefix must be 0..32");
+                    return xorcist::planning::serialize_list(
+                        xorcist::planning::split_ipv4(xorcist::planning::parse_cidr(ui.vlsm_parent),
+                            static_cast<std::uint8_t>(value), 1024), xorcist::planning::ListFormat::Lines);
+                });
+            }
+            ImGui::InputTextMultiline("VLSM requests: name=hosts", ui.vlsm_requests, sizeof(ui.vlsm_requests), ImVec2(-1, 95));
+            if (ImGui::Button("Allocate VLSM")) {
+                safe_run(ui.allocation_result, [&] {
+                    std::vector<xorcist::planning::HostRequest> requests;
+                    std::istringstream lines(ui.vlsm_requests);
+                    std::string line;
+                    while (std::getline(lines, line)) {
+                        if (line.empty()) continue;
+                        const auto pos = line.find('=');
+                        if (pos == std::string::npos) throw std::invalid_argument("expected name=hosts per line");
+                        const std::string_view number(line.data() + pos + 1, line.size() - pos - 1);
+                        std::uint64_t hosts = 0;
+                        const auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), hosts);
+                        if (ec != std::errc{} || ptr != number.data() + number.size())
+                            throw std::invalid_argument("invalid host count");
+                        requests.push_back({line.substr(0, pos), hosts});
+                    }
+                    const auto allocations = xorcist::planning::allocate_vlsm(
+                        xorcist::planning::parse_cidr(ui.vlsm_parent), requests);
+                    std::string result = "name,hosts,cidr\n";
+                    for (const auto& a : allocations)
+                        result += a.request.name + "," + std::to_string(a.request.hosts) + "," + a.network.str() + "\n";
+                    return result;
+                });
+            }
+            ImGui::Separator();
+            if (!ui.allocation_result.empty() && ImGui::Button("Copy allocation result"))
+                ImGui::SetClipboardText(ui.allocation_result.c_str());
+            show_text(ui.allocation_result);
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("List Import / Export")) {
+            ImGui::TextWrapped("Convert network lists between plain text and strict one-column CSV (cidr header). Output files must not already exist.");
+            ImGui::InputText("Input file", ui.list_input, sizeof(ui.list_input));
+            ImGui::InputText("Output file", ui.list_output, sizeof(ui.list_output));
+            ImGui::Combo("Input format", &ui.list_from, "lines\0csv\0");
+            ImGui::Combo("Output format", &ui.list_to, "lines\0csv\0");
+            if (ImGui::Button("Convert file")) {
+                safe_run(ui.import_result, [&] {
+                    const auto items = xorcist::planning::load_list(ui.list_input,
+                        ui.list_from == 0 ? xorcist::planning::ListFormat::Lines : xorcist::planning::ListFormat::Csv);
+                    xorcist::planning::save_list(ui.list_output, items,
+                        ui.list_to == 0 ? xorcist::planning::ListFormat::Lines : xorcist::planning::ListFormat::Csv);
+                    return "Wrote " + std::to_string(items.size()) + " networks to " + ui.list_output;
+                });
+            }
+            show_text(ui.import_result);
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("XOR Text / Hex")) {

@@ -1,3 +1,4 @@
+#include "planning_cli.hpp"
 // SPDX-License-Identifier: MIT
 #include "xorcist/legacy.hpp"
 #include "xorcist/net.hpp"
@@ -16,9 +17,18 @@ void usage(std::ostream& out) {
     out << R"(XORcist 2.0 - networking and XOR utility (XOR IS NOT SECURE ENCRYPTION)
 
 Usage:
-  xorcist net inspect <IPv4/CIDR>
-  xorcist net summarize <IPv4/CIDR>... [--file networks.txt]
-  xorcist net collapse <IPv4/CIDR>... [--file networks.txt]
+  xorcist net inspect <IPv4-or-IPv6-CIDR>
+  xorcist net summarize <CIDR>... [--file networks.txt]
+  xorcist net collapse <CIDR>... [--file networks.txt]
+  xorcist net contains <CIDR> <IP>
+  xorcist net covers <OUTER-CIDR> <INNER-CIDR>
+  xorcist net overlap <CIDR> <CIDR>
+  xorcist net intersect <CIDR> <CIDR>
+  xorcist net conflicts <CIDR>... [--file networks.txt]
+  xorcist net range <FIRST-IP> <LAST-IP>
+  xorcist net split <IPv4-CIDR> <NEW-PREFIX>
+  xorcist net vlsm <IPv4-CIDR> <LABEL=HOSTS>...
+  xorcist net convert --in file --out file [--from lines|csv] [--to lines|csv]
   xorcist xor text --text "Hello!" --key-hex 010203
   xorcist xor hex --hex 49666f --key-hex 010203
   xorcist xor file --in original.bin --out transformed.bin --key-hex 010203
@@ -28,7 +38,8 @@ Usage:
 XOR text/hex print hexadecimal bytes; applying the same key twice recovers the input.
 Never reuse repeating-key XOR for sensitive data; it provides no authentication.
 Output files must not exist. Input files are never overwritten.
-Networks must be IPv4 with explicit /0 through /32 prefixes; use # comments in files.
+Networks require explicit IPv4 /0..32 or IPv6 /0..128; no mixing families in aggregation.
+CSV files have one column named cidr; line files may use # comments.
 )";
 }
 std::string option(const std::vector<std::string>& args, std::string_view flag, bool required = true) {
@@ -55,30 +66,6 @@ void validate_flags(const std::vector<std::string>& args,
         ++i;
     }
 }
-std::string load_file(const std::filesystem::path& path) {
-    if (!std::filesystem::is_regular_file(path) || std::filesystem::file_size(path) > 1024U * 1024U)
-        throw std::invalid_argument("network list must be a regular file no larger than 1 MiB");
-    std::ifstream source(path, std::ios::binary);
-    if (!source) throw std::runtime_error("cannot read network list: " + path.string());
-    return {std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>()};
-}
-std::vector<xorcist::net::Network> read_network_args(const std::vector<std::string>& args) {
-    std::vector<xorcist::net::Network> list;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (args[i] == "--file") {
-            if (i + 1 >= args.size() || args[i + 1].starts_with("--"))
-                throw std::invalid_argument("--file requires a filename");
-            const auto file = xorcist::net::parse_network_list(load_file(args[++i]));
-            list.insert(list.end(), file.begin(), file.end());
-        } else if (args[i].starts_with("--")) {
-            throw std::invalid_argument("unknown option: " + args[i]);
-        } else {
-            list.push_back(xorcist::net::parse_cidr(args[i]));
-        }
-    }
-    if (list.empty()) throw std::invalid_argument("at least one network is required");
-    return list;
-}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -86,23 +73,7 @@ int main(int argc, char** argv) {
         std::vector<std::string> args(argv + 1, argv + argc);
         if (args.empty() || args[0] == "--help" || args[0] == "-h") { usage(std::cout); return 0; }
         const auto group = args[0];
-        if (group == "net") {
-            if (args.size() < 3) throw std::invalid_argument("expected net inspect|summarize|collapse and arguments");
-            const auto action = args[1];
-            std::vector<std::string> tail(args.begin() + 2, args.end());
-            if (action == "inspect") {
-                if (tail.size() != 1) throw std::invalid_argument("inspect expects exactly one IPv4/CIDR");
-                std::cout << xorcist::net::inspect(xorcist::net::parse_cidr(tail[0]));
-            } else if (action == "summarize") {
-                const auto net = xorcist::net::enclosing_supernet(read_network_args(tail));
-                std::cout << "Supernet: " << net.cidr() << "\nMask:     "
-                          << xorcist::net::format_ipv4(net.mask()) << "\n";
-            } else if (action == "collapse") {
-                for (const auto& net : xorcist::net::collapse(read_network_args(tail)))
-                    std::cout << net.cidr() << '\n';
-            } else throw std::invalid_argument("unknown net command: " + action);
-            return 0;
-        }
+        if (group == "net") return xorcist::cli::run_net(args);
         if (group == "xor") {
             if (args.size() < 3) throw std::invalid_argument("expected xor text|hex|file");
             const auto action = args[1];

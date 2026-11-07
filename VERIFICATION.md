@@ -51,3 +51,25 @@ An unchanged staged CLI install was packaged twice with the same environment and
 
 These tests cannot substitute for user-side clean checkout, CI platform matrix, actual GUI
 interaction or real Windows 10/11 hardware testing. Follow `docs/M0_ACCEPTANCE.md`.
+
+## M1 engineering verification — November 7, 2026
+
+The results below pertain to the **proposed M1 patch**, not to an accepted release. Keep the prior historical baseline section above for provenance.
+
+| Evidence | Observed result | Qualification |
+|---|---|---|
+| GCC 14.2.0, Debian 13 C++20 CLI and core | PASS | Build from patched source with Ninja |
+| Original `xorcist_core_tests` | PASS | Original suite retained |
+| `xorcist_m1_tests` | PASS | Strict IPv4/IPv6 parsing, relationships, edge prefixes, range decomposition, split/VLSM, CSV import/export, invalid inputs |
+| 6,000 deterministic range cases | PASS | Independent per-address mathematical coverage oracle on IPv4 `/24` and IPv6 `/120` domains |
+| `xorcist_m1_cli_tests` | PASS | End-to-end subprocess commands, error exit codes, CSV output and overwrite refusal |
+| CTest aggregate on rebased M0+M1 source | PASS | 4/4 suites on Debian 13 GCC 14.2.0; includes retained M0 property test |
+| GUI source translation-unit syntax | PASS (limited) | Dear ImGui headers + GLFW declaration stubs, with retained M0 smoke option; not a full GUI build |
+| Full GUI compile, link, launch and manual feature checks | NOT VERIFIED FOR M1 | Must be performed on user's Ubuntu 26.04 system |
+| Windows 10/11, Debian 12, Debian 13, Ubuntu 26.04 CI matrix | NOT VERIFIED FOR M1 | CI output and physical hardware remain necessary |
+| ASan/UBSan for merged M0+M1 | PASS | Clang 17 instrumented build; 4/4 CTest suites |
+| Bounded fuzz of retained M0 network harness | PASS | 300 iterations; not exhaustive |
+| M0 candidate packaging and verification after M1 | PASS | SHA-256 + 13 staged SPDX file hashes |
+| M0 development quality gates | IMPLEMENTED; locally accepted | Release qualification remains deferred per `docs/M0_ACCEPTANCE.md` |
+
+See [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md) for precise manual checks and the M0/M1 separation.

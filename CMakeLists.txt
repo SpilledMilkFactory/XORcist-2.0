@@ -15,6 +15,7 @@ set(XORCIST_IMGUI_SOURCE_DIR "" CACHE PATH "Use predownloaded pinned Dear ImGui 
 
 add_library(xorcist_core STATIC
     src/core/net.cpp
+    src/core/planning.cpp
     src/core/xor.cpp
     src/core/legacy.cpp)
 target_include_directories(xorcist_core PUBLIC
@@ -29,7 +30,7 @@ else()
 endif()
 
 if(XORCIST_BUILD_CLI)
-    add_executable(xorcist src/cli/main.cpp)
+    add_executable(xorcist src/cli/main.cpp src/cli/planning_cli.cpp)
     target_link_libraries(xorcist PRIVATE xorcist_core)
     install(TARGETS xorcist RUNTIME DESTINATION bin)
 endif()
@@ -101,6 +102,20 @@ if(XORCIST_BUILD_TESTS)
     target_link_libraries(xorcist_net_properties PRIVATE xorcist_core)
     add_test(NAME xorcist_net_properties COMMAND xorcist_net_properties)
     set_tests_properties(xorcist_net_properties PROPERTIES TIMEOUT 120)
+
+    add_executable(xorcist_m1_tests tests/m1_tests.cpp)
+    target_link_libraries(xorcist_m1_tests PRIVATE xorcist_core)
+    add_test(NAME xorcist_m1_tests COMMAND xorcist_m1_tests)
+    set_tests_properties(xorcist_m1_tests PROPERTIES TIMEOUT 120)
+    if(XORCIST_BUILD_CLI)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME xorcist_m1_cli_tests
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/m1_cli_tests.py" "$<TARGET_FILE:xorcist>")
+        else()
+            message(WARNING "Python3 interpreter not found: M1 CLI integration tests unavailable")
+        endif()
+    endif()
 endif()
 
 install(TARGETS xorcist_core ARCHIVE DESTINATION lib)
@@ -115,7 +130,7 @@ if(XORCIST_BUILD_FUZZER)
     # Separate instrumented core avoids leaking libFuzzer coverage requirements
     # into the ordinary CLI and test executables.
     add_library(xorcist_fuzz_core STATIC
-        src/core/net.cpp src/core/xor.cpp src/core/legacy.cpp)
+        src/core/net.cpp src/core/planning.cpp src/core/xor.cpp src/core/legacy.cpp)
     target_include_directories(xorcist_fuzz_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_features(xorcist_fuzz_core PUBLIC cxx_std_20)
     target_compile_options(xorcist_fuzz_core PRIVATE -fsanitize=fuzzer-no-link)
