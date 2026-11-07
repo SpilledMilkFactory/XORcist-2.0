@@ -4,12 +4,17 @@
 #include "xorcist/net.hpp"
 #include "xorcist/planning.hpp"
 #include "xorcist/diagnostics.hpp"
+#include "xorcist/data.hpp"
+#include "xorcist/secure.hpp"
 #include "xorcist/xor.hpp"
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#include <openssl/crypto.h>
+#include <algorithm>
+#include <cstring>
 
 #include <charconv>
 #include <cstdint>
@@ -25,7 +30,7 @@
 #include <vector>
 
 namespace {
-struct UI {
+struct XorcistUI {
     char networks[8192] = "192.168.1.1/24\n192.168.2.1/24\n192.168.3.1/24";
     char relation_a[128] = "2001:db8::/32";
     char relation_b[128] = "2001:db8:100::/40";
@@ -63,6 +68,21 @@ struct UI {
     int m2_interval = 250;
     std::future<std::string> m2_future;
     std::string m2_result;
+    char m3_input[1024] = "";
+    char m3_output[1024] = "";
+    char m3_left[1024] = "";
+    char m3_right[1024] = "";
+    char m3_hex[8192] = "a5ff";
+    char m3_mask[8192] = "0f0f";
+    int m3_mask_op = 0;
+    int m3_encoding = 0;
+    int m3_limit = 256;
+    char m3_password[1024] = "";
+    char m3_secure_input[1024] = "";
+    char m3_secure_output[1024] = "";
+    std::future<std::string> m3_future;
+    std::string m3_result;
+    std::string m3_secure_result;
 };
 
 template <typename Action> void safe_run(std::string& result, Action&& action) {
@@ -72,7 +92,7 @@ template <typename Action> void safe_run(std::string& result, Action&& action) {
 void show_text(const std::string& text) {
     if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
 }
-template <typename Fn> void launch_diagnostic(UI& ui, Fn action) {
+template <typename Fn> void launch_diagnostic(XorcistUI& ui, Fn action) {
     if (ui.m2_future.valid()) return;
     ui.m2_result = "Query running...";
     ui.m2_future = std::async(std::launch::async, [action = std::move(action)]() mutable {
@@ -80,7 +100,7 @@ template <typename Fn> void launch_diagnostic(UI& ui, Fn action) {
         catch (const std::exception& error) { return std::string("Error: ") + error.what(); }
     });
 }
-void diagnostics_result(UI& ui) {
+void diagnostics_result(XorcistUI& ui) {
     if (ui.m2_future.valid()) ImGui::TextUnformatted("Working... (OS DNS queries may take time)");
     if (!ui.m2_result.empty() && ImGui::Button("Copy diagnostics result"))
         ImGui::SetClipboardText(ui.m2_result.c_str());
@@ -88,10 +108,13 @@ void diagnostics_result(UI& ui) {
     ImGui::TextUnformatted(ui.m2_result.c_str());
     ImGui::EndChild();
 }
-void draw(UI& ui) {
+void draw(XorcistUI& ui) {
     if (ui.m2_future.valid() &&
         ui.m2_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
         ui.m2_result = ui.m2_future.get();
+    if (ui.m3_future.valid() &&
+        ui.m3_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        ui.m3_secure_result = ui.m3_future.get();
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
@@ -329,6 +352,116 @@ void draw(UI& ui) {
             diagnostics_result(ui);
             ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem("Data / Binary Tools")) {
+            ImGui::TextWrapped("Offline binary inspection, comparison and encoding. Base64/hex conversion files are limited to 16 MiB; existing outputs are never overwritten.");
+            ImGui::InputText("Input file##m3", ui.m3_input, sizeof(ui.m3_input));
+            ImGui::InputText("Output file##m3", ui.m3_output, sizeof(ui.m3_output));
+            const char* encodings[] = {"Base64", "Hexadecimal"};
+            ImGui::Combo("Encoding", &ui.m3_encoding, encodings, 2);
+            if (ImGui::Button("Encode file")) {
+                safe_run(ui.m3_result, [&] {
+                    const auto input = xorcist::data::read_small_file(ui.m3_input);
+                    const auto coded = ui.m3_encoding == 0 ? xorcist::data::base64_encode(input) :
+                        xorcist::xor_tool::hex_encode(input);
+                    xorcist::xor_tool::write_new_file(ui.m3_output, xorcist::xor_tool::to_bytes(coded));
+                    return std::string("Encoded file created without overwrite.");
+                });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Decode file")) {
+                safe_run(ui.m3_result, [&] {
+                    const auto input = xorcist::data::read_small_file(ui.m3_input);
+                    std::string coded;
+                    if (!input.empty()) coded.assign(reinterpret_cast<const char*>(input.data()), input.size());
+                    const auto decoded = ui.m3_encoding == 0 ? xorcist::data::base64_decode(coded) :
+                        (coded.empty() ? xorcist::data::Bytes{} : xorcist::xor_tool::hex_decode(coded));
+                    xorcist::xor_tool::write_new_file(ui.m3_output, decoded);
+                    return std::string("Decoded file created without overwrite.");
+                });
+            }
+            ImGui::InputInt("Hexdump limit (1..4096)", &ui.m3_limit);
+            if (ImGui::Button("Inspect input")) {
+                safe_run(ui.m3_result, [&] {
+                    if (ui.m3_limit < 1 || ui.m3_limit > 4096)
+                        throw std::invalid_argument("inspection limit must be 1..4096");
+                    return xorcist::data::hexdump_file(ui.m3_input, static_cast<std::size_t>(ui.m3_limit));
+                });
+            }
+            ImGui::Separator();
+            ImGui::InputText("Left file", ui.m3_left, sizeof(ui.m3_left));
+            ImGui::InputText("Right file", ui.m3_right, sizeof(ui.m3_right));
+            if (ImGui::Button("Compare files")) {
+                safe_run(ui.m3_result, [&] { return xorcist::data::diff_files(ui.m3_left, ui.m3_right); });
+            }
+            ImGui::Separator();
+            ImGui::InputText("Bytes (hex)##m3", ui.m3_hex, sizeof(ui.m3_hex));
+            ImGui::InputText("Bitmask (hex)", ui.m3_mask, sizeof(ui.m3_mask));
+            const char* operations[] = {"and", "or", "xor", "not"};
+            ImGui::Combo("Bit operation", &ui.m3_mask_op, operations, 4);
+            if (ImGui::Button("Apply bitmask")) {
+                safe_run(ui.m3_result, [&] {
+                    return xorcist::xor_tool::hex_encode(xorcist::data::mask_bytes(
+                        xorcist::xor_tool::hex_decode(ui.m3_hex),
+                        xorcist::xor_tool::hex_decode(ui.m3_mask), operations[ui.m3_mask_op]));
+                });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Show bits")) {
+                safe_run(ui.m3_result, [&] {
+                    return xorcist::data::bit_string(xorcist::xor_tool::hex_decode(ui.m3_hex));
+                });
+            }
+            if (!ui.m3_result.empty() && ImGui::Button("Copy data result"))
+                ImGui::SetClipboardText(ui.m3_result.c_str());
+            ImGui::BeginChild("Data output", ImVec2(0, 160), true);
+            ImGui::TextUnformatted(ui.m3_result.c_str());
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Authenticated Files")) {
+            ImGui::TextWrapped("AES-256-GCM, scrypt, randomized salt/nonce and authenticated versioned header. Passwords are never logged. Incorrect passwords and tampering never publish plaintext.");
+            ImGui::InputText("Input file##secure", ui.m3_secure_input, sizeof(ui.m3_secure_input));
+            ImGui::InputText("Output file##secure", ui.m3_secure_output, sizeof(ui.m3_secure_output));
+            ImGui::InputText("Passphrase", ui.m3_password, sizeof(ui.m3_password), ImGuiInputTextFlags_Password);
+            if (ui.m3_future.valid()) ImGui::TextUnformatted("Encryption/decryption running...");
+            if (ImGui::Button("Encrypt authenticated file") && !ui.m3_future.valid()) {
+                auto password = std::string(ui.m3_password);
+                const std::string input(ui.m3_secure_input), output(ui.m3_secure_output);
+                OPENSSL_cleanse(ui.m3_password, sizeof(ui.m3_password));
+                ui.m3_secure_result = "Working...";
+                ui.m3_future = std::async(std::launch::async,
+                    [input, output, password = std::move(password)]() mutable {
+                        std::string result;
+                        try {
+                            xorcist::secure::encrypt_file(input, output, password);
+                            result = "Authenticated file encryption complete.";
+                        } catch (const std::exception& e) { result = std::string("Error: ") + e.what(); }
+                        if (!password.empty()) OPENSSL_cleanse(password.data(), password.size());
+                        return result;
+                    });
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Decrypt + verify file") && !ui.m3_future.valid()) {
+                auto password = std::string(ui.m3_password);
+                const std::string input(ui.m3_secure_input), output(ui.m3_secure_output);
+                OPENSSL_cleanse(ui.m3_password, sizeof(ui.m3_password));
+                ui.m3_secure_result = "Working...";
+                ui.m3_future = std::async(std::launch::async,
+                    [input, output, password = std::move(password)]() mutable {
+                        std::string result;
+                        try {
+                            xorcist::secure::decrypt_file(input, output, password);
+                            result = "Authentication passed. Verified plaintext file published.";
+                        } catch (const std::exception& e) { result = std::string("Error: ") + e.what(); }
+                        if (!password.empty()) OPENSSL_cleanse(password.data(), password.size());
+                        return result;
+                    });
+            }
+            ImGui::Separator();
+            show_text(ui.m3_secure_result);
+            ImGui::TextWrapped("Use a strong unique passphrase (12+ bytes). The passphrase is not recoverable. Do not place secrets in file paths. Output files must not already exist.");
+            ImGui::EndTabItem();
+        }
         if (ImGui::BeginTabItem("XOR Text / Hex")) {
             ImGui::TextWrapped("Binary XOR demonstration ONLY. Repeating-key XOR provides NO modern cryptographic security or integrity.");
             ImGui::InputText("Key (hexadecimal)", ui.key, sizeof(ui.key));
@@ -419,7 +552,7 @@ int main(int argc, char** argv) {
     if (!ImGui_ImplOpenGL3_Init("#version 330")) {
         ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext(); glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
-    UI ui;
+    XorcistUI ui;
     unsigned frames = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();

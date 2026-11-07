@@ -17,6 +17,8 @@ add_library(xorcist_core STATIC
     src/core/net.cpp
     src/core/planning.cpp
     src/core/diagnostics.cpp
+    src/core/data.cpp
+    src/core/secure.cpp
     src/core/xor.cpp
     src/core/legacy.cpp)
 target_include_directories(xorcist_core PUBLIC
@@ -24,7 +26,8 @@ target_include_directories(xorcist_core PUBLIC
     $<INSTALL_INTERFACE:include>)
 target_compile_features(xorcist_core PUBLIC cxx_std_20)
 find_package(Threads REQUIRED)
-target_link_libraries(xorcist_core PUBLIC Threads::Threads)
+find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+target_link_libraries(xorcist_core PUBLIC Threads::Threads OpenSSL::Crypto)
 set_target_properties(xorcist_core PROPERTIES CXX_EXTENSIONS OFF)
 if(WIN32)
     target_link_libraries(xorcist_core PUBLIC ws2_32 iphlpapi)
@@ -36,7 +39,7 @@ else()
 endif()
 
 if(XORCIST_BUILD_CLI)
-    add_executable(xorcist src/cli/main.cpp src/cli/planning_cli.cpp src/cli/diagnostics_cli.cpp)
+    add_executable(xorcist src/cli/main.cpp src/cli/planning_cli.cpp src/cli/diagnostics_cli.cpp src/cli/data_cli.cpp)
     target_link_libraries(xorcist PRIVATE xorcist_core)
     install(TARGETS xorcist RUNTIME DESTINATION bin)
 endif()
@@ -109,6 +112,11 @@ if(XORCIST_BUILD_TESTS)
     add_test(NAME xorcist_net_properties COMMAND xorcist_net_properties)
     set_tests_properties(xorcist_net_properties PROPERTIES TIMEOUT 120)
 
+    add_executable(xorcist_m3_tests tests/m3_tests.cpp)
+    target_link_libraries(xorcist_m3_tests PRIVATE xorcist_core)
+    add_test(NAME xorcist_m3_tests COMMAND xorcist_m3_tests)
+    set_tests_properties(xorcist_m3_tests PROPERTIES TIMEOUT 120)
+
     add_executable(xorcist_m2_tests tests/m2_tests.cpp)
     target_link_libraries(xorcist_m2_tests PRIVATE xorcist_core)
     add_test(NAME xorcist_m2_tests COMMAND xorcist_m2_tests)
@@ -121,6 +129,9 @@ if(XORCIST_BUILD_TESTS)
     if(XORCIST_BUILD_CLI)
         find_package(Python3 COMPONENTS Interpreter QUIET)
         if(Python3_Interpreter_FOUND)
+            add_test(NAME xorcist_m3_cli_tests
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/m3_cli_tests.py" "$<TARGET_FILE:xorcist>")
+            set_tests_properties(xorcist_m3_cli_tests PROPERTIES TIMEOUT 120)
             add_test(NAME xorcist_m2_cli_tests
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/m2_cli_tests.py" "$<TARGET_FILE:xorcist>")
             set_tests_properties(xorcist_m2_cli_tests PROPERTIES TIMEOUT 30)
@@ -134,7 +145,7 @@ endif()
 
 install(TARGETS xorcist_core ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
-install(FILES README.md LICENSE THIRD_PARTY_NOTICES.md SECURITY.md DESTINATION share/doc/xorcist)
+install(FILES README.md LICENSE THIRD_PARTY_NOTICES.md SECURITY.md docs/M3_FILE_FORMAT.md DESTINATION share/doc/xorcist)
 install(DIRECTORY docs/licenses/ DESTINATION share/doc/xorcist/third-party-licenses)
 
 if(XORCIST_BUILD_FUZZER)
@@ -144,12 +155,21 @@ if(XORCIST_BUILD_FUZZER)
     # Separate instrumented core avoids leaking libFuzzer coverage requirements
     # into the ordinary CLI and test executables.
     add_library(xorcist_fuzz_core STATIC
-        src/core/net.cpp src/core/planning.cpp src/core/diagnostics.cpp src/core/xor.cpp src/core/legacy.cpp)
+        src/core/net.cpp src/core/planning.cpp src/core/diagnostics.cpp src/core/data.cpp src/core/secure.cpp src/core/xor.cpp src/core/legacy.cpp)
     target_include_directories(xorcist_fuzz_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(xorcist_fuzz_core PUBLIC OpenSSL::Crypto)
     target_compile_features(xorcist_fuzz_core PUBLIC cxx_std_20)
     target_compile_options(xorcist_fuzz_core PRIVATE -fsanitize=fuzzer-no-link)
     add_executable(xorcist_fuzz_net tests/fuzz_net.cpp)
     target_link_libraries(xorcist_fuzz_net PRIVATE xorcist_fuzz_core)
     target_compile_options(xorcist_fuzz_net PRIVATE -fsanitize=fuzzer)
     target_link_options(xorcist_fuzz_net PRIVATE -fsanitize=fuzzer)
+    add_executable(xorcist_fuzz_data tests/fuzz_data.cpp)
+    target_link_libraries(xorcist_fuzz_data PRIVATE xorcist_fuzz_core)
+    target_compile_options(xorcist_fuzz_data PRIVATE -fsanitize=fuzzer)
+    target_link_options(xorcist_fuzz_data PRIVATE -fsanitize=fuzzer)
+    add_executable(xorcist_fuzz_envelope tests/fuzz_envelope.cpp)
+    target_link_libraries(xorcist_fuzz_envelope PRIVATE xorcist_fuzz_core)
+    target_compile_options(xorcist_fuzz_envelope PRIVATE -fsanitize=fuzzer)
+    target_link_options(xorcist_fuzz_envelope PRIVATE -fsanitize=fuzzer)
 endif()

@@ -78,6 +78,7 @@ def sbom(stage: Path, platform: str, epoch: int) -> dict:
         ('Dear-ImGui', deps()['XORCIST_IMGUI_VERSION'], deps()['XORCIST_IMGUI_COMMIT'], 'MIT'),
         ('GLFW', deps()['XORCIST_GLFW_VERSION'], deps()['XORCIST_GLFW_COMMIT'], 'Zlib'),
         ('OpenGL-system-runtime', 'OS-supplied', 'NOASSERTION', 'NOASSERTION'),
+        ('OpenSSL-libcrypto-system', deps().get('XORCIST_OPENSSL_MIN_VERSION', '>=3.0'), 'NOASSERTION', 'Apache-2.0'),
     ]
     packages = [installed_pkg]
     for i, (name, ver, commit, license_id) in enumerate(components):

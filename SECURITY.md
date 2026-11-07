@@ -2,9 +2,9 @@
 
 ## Scope of this baseline
 
-XORcist 2.0 is a **network-address planning** tool and a **binary XOR demonstration**.
+XORcist 2.0 includes network planning, a binary XOR demonstration, and M3 authenticated-file encryption.
 The XOR functionality is not a confidential or integrity-protecting file encryption solution.
-It is inappropriate for credentials, production secrets, backups, or sensitive data.
+Repeating-key XOR is inappropriate for credentials, production secrets, backups, or sensitive data; use M3 authenticated mode rather than XOR for confidential files.
 
 * Repeating-key XOR leaks structure and enables plaintext recovery if an attacker knows or guesses data; it is not authenticated.
 * Keys passed via `--key-hex` can appear in shell history, process arguments and logs. GUI key fields are also not secret-management tools.
@@ -18,8 +18,8 @@ It is inappropriate for credentials, production secrets, backups, or sensitive d
 
 ## Not in scope yet
 
-No secure encryption mode, file authentication, key custody, IPv6 zone-aware interface routing, packet capture, privilege elevation, broad network discovery or scanning is included. M2 introduces opt-in single-endpoint TCP connection checks, which are active traffic but are not ICMP ping or a scan engine.
-Before shipping a secure encryption feature, use a reviewed AEAD library such as OpenSSL EVP, libsodium, or platform cryptography; define key derivation, salt/nonce construction, metadata authentication, versioned file formats, error behavior, memory handling, and independent test vectors.
+No OS-managed secret vault, hardware-backed key custody, IPv6 zone-aware interface routing, packet capture, privilege elevation, broad network discovery or scanning is included. M2 introduces opt-in single-endpoint TCP connection checks, which are active traffic but are not ICMP ping or a scan engine.
+M3 implements a versioned AEAD container through OpenSSL 3 EVP and scrypt. This has not undergone independent security review; do not characterize it as formally audited or certified.
 
 ## Reporting vulnerabilities
 
@@ -71,3 +71,45 @@ portable packaging require separate evidence under `docs/M0_ACCEPTANCE.md`.
 * Linux route inventory reads `/proc/net/route` and `/proc/net/ipv6_route`; systems without
   these interfaces or with restricted visibility may report errors. Windows adapters/routes
   use native OS APIs, but must be compiled and checked during deferred release qualification.
+
+
+## M3 authenticated-file encryption threat model
+
+* The `secure` command uses OpenSSL 3.x `EVP_aes_256_gcm` authenticated encryption,
+  random 16-byte scrypt salt, random 12-byte GCM nonce and 16-byte tag.
+  Format version 1 has an exactly 64-byte authenticated header (`XORC3AE1`,
+  version/algorithm/KDF IDs, scrypt N=32768/r=8/p=1, salt, nonce, plaintext
+  length, reserved zeros), followed by ciphertext and tag. Header bytes are
+  AEAD associated data. Unknown versions, unsupported KDF values, excessive
+  sizes and unexpected lengths are rejected before costly derivation.
+* New encryptions require a passphrase of 12..4096 bytes. Length alone does not
+  guarantee sufficient entropy: choose a genuinely unpredictable passphrase.
+  The passphrase is **not** recoverable; a lost passphrase means lost plaintext.
+  scrypt slows offline guessing but cannot compensate for weak choices.
+* The interactive CLI disables terminal echo and does not accept passwords in
+  argv. `--password-stdin` is intended for controlled scripts; supplying
+  secrets from shell literals, environment variables, logs or world-readable
+  files can leak passwords. The GUI has a masked passphrase field, cleared on
+  submission. Copies may remain in OS process memory; no memory-lock guarantee.
+* The CLI and GUI never publish a decrypted output until the OpenSSL GCM
+  authentication final check succeeds. Intermediate plaintext is written into
+  an exclusive temporary file with POSIX mode 0600 in the destination directory
+  and removed on caught errors. POSIX publication uses `link()` so it cannot
+  overwrite an existing path; Windows uses a move without replace. The
+  destination is never overwritten. Do not operate in adversarial directories:
+  file permissions and concurrent filesystem interference are OS-dependent.
+* Crash, SIGKILL, power failure or malware can leave a **temporary plaintext
+  file** in the chosen directory. Encryption does not provide secure deletion
+  of plaintext, swap, crash dumps, backups, or filesystem journals. Prefer
+  encrypted disks for sensitive working directories. File metadata, filename,
+  plaintext length (and KDF parameters) are **not hidden** by the container.
+* GCM version 1 deliberately limits plaintext to 32 GiB per independently
+  generated nonce. The code does not support append, resume, partial decryption,
+  external associated data, recipient public keys, or a password recovery agent.
+  A filename extension does not imply trusted format.
+* Data Base64/hex tools are reversible **encodings**, not cryptography; the
+  in-memory file conversions are limited to 16 MiB. `data diff` streams 64 KiB
+  blocks and prints bounded offsets but counts all differing byte positions.
+* OpenSSL is a runtime security dependency; track security advisories, versions
+  and provider availability before M4 release qualification. No third-party
+  security assessment or independent formal verification is claimed.

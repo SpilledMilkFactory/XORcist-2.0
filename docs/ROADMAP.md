@@ -29,7 +29,7 @@ See [`M1_ACCEPTANCE.md`](M1_ACCEPTANCE.md).
 
 ## M2 — Passive diagnostics / administration
 
-**Status: M2 implementation ready for local validation; release-platform checks deferred.**
+**Development status: COMPLETE for Ubuntu 26.04 local verification (owner-reported, November 7, 2026); release-platform checks deferred.**
 See [`M2_ACCEPTANCE.md`](M2_ACCEPTANCE.md). System inventory is read-only; bounded TCP probes are opt-in.
 
 
@@ -39,6 +39,10 @@ See [`M2_ACCEPTANCE.md`](M2_ACCEPTANCE.md). System inventory is read-only; bound
 - Safe reachability probes on user-specified hosts with explicit rate and duration limits.
 
 ## M3 — Robust data tools
+
+**Development status: IMPLEMENTED; awaiting owner Ubuntu 26.04 CLI/GUI verification.**
+See [`M3_ACCEPTANCE.md`](M3_ACCEPTANCE.md).
+
 
 - Dedicated Base64, hex, bit-mask, binary/ASCII comparison and file diff tools.
 - Authenticated encryption **only** via a mature, independently reviewed crypto library.

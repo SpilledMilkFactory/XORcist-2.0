@@ -1,3 +1,4 @@
+#include "data_cli.hpp"
 #include "diagnostics_cli.hpp"
 #include "planning_cli.hpp"
 // SPDX-License-Identifier: MIT
@@ -38,6 +39,14 @@ Usage:
   xorcist diag wildcard <IPv4-wildcard>
   xorcist diag acl <CIDR>
   xorcist diag probe <numeric-IP> <TCP-port> [--count N] [--timeout-ms N] [--interval-ms N]
+  xorcist secure encrypt --in INPUT --out OUTPUT [--password-stdin]
+  xorcist secure decrypt --in INPUT --out OUTPUT [--password-stdin]
+  xorcist data base64 encode|decode --in INPUT --out OUTPUT
+  xorcist data hex encode|decode --in INPUT --out OUTPUT
+  xorcist data bits --hex BYTES
+  xorcist data mask --hex BYTES --mask-hex MASK --op and|or|xor|not
+  xorcist data inspect --in FILE [--limit 256]
+  xorcist data diff --left FILE --right FILE [--limit 32]
   xorcist xor text --text "Hello!" --key-hex 010203
   xorcist xor hex --hex 49666f --key-hex 010203
   xorcist xor file --in original.bin --out transformed.bin --key-hex 010203
@@ -46,6 +55,8 @@ Usage:
 
 XOR text/hex print hexadecimal bytes; applying the same key twice recovers the input.
 Never reuse repeating-key XOR for sensitive data; it provides no authentication.
+Secure mode uses authenticated AES-256-GCM and scrypt; passwords are not CLI arguments.
+Data hex/Base64 file transforms are bounded at 16 MiB per input.
 Output files must not exist. Input files are never overwritten.
 Networks require explicit IPv4 /0..32 or IPv6 /0..128; no mixing families in aggregation.
 CSV files have one column named cidr; line files may use # comments.
@@ -82,6 +93,8 @@ int main(int argc, char** argv) {
         std::vector<std::string> args(argv + 1, argv + argc);
         if (args.empty() || args[0] == "--help" || args[0] == "-h") { usage(std::cout); return 0; }
         const auto group = args[0];
+        if (group == "secure") return xorcist::cli::run_secure(args);
+        if (group == "data") return xorcist::cli::run_data(args);
         if (group == "net") return xorcist::cli::run_net(args);
         if (group == "diag") return xorcist::cli::run_diag(args);
         if (group == "xor") {

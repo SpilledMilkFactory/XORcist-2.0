@@ -27,7 +27,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git g++ cmake ninja-build python3 \
+            ca-certificates git g++ cmake ninja-build python3 libssl-dev \
             libgl1-mesa-dev libgl1-mesa-dri libx11-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev \
             xvfb xauth
@@ -91,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y clang ninja-build cmake
+        run: sudo apt-get update && sudo apt-get install -y clang ninja-build cmake libssl-dev
       - name: Configure instrumented core and libFuzzer
         run: |
           cmake -S . -B build-sanitized -G Ninja -DCMAKE_BUILD_TYPE=Debug \
@@ -109,42 +109,26 @@ jobs:
           cp tests/corpus/net/* /tmp/xorcist-fuzz-corpus/
           ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
             ./build-sanitized/xorcist_fuzz_net /tmp/xorcist-fuzz-corpus -runs=3000 -max_len=512 -timeout=10
+          mkdir -p /tmp/xorcist-fuzz-data
+          printf 'TWFu' > /tmp/xorcist-fuzz-data/base64.txt
+          printf '00112233' > /tmp/xorcist-fuzz-data/hex.txt
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
+            ./build-sanitized/xorcist_fuzz_data /tmp/xorcist-fuzz-data -runs=3000 -max_len=512 -timeout=10
+          mkdir -p /tmp/xorcist-fuzz-envelope
+          python3 - <<'PY_ENVELOPE'
+          from pathlib import Path
+          p=Path('/tmp/xorcist-fuzz-envelope')/'valid-v1-header.bin'
+          h=bytearray(64)
+          h[:8]=b'XORC3AE1'; h[8:11]=b'\x01\x01\x01'
+          h[12:16]=(32768).to_bytes(4,'big')
+          h[16:20]=(8).to_bytes(4,'big')
+          h[20:24]=(1).to_bytes(4,'big')
+          p.write_bytes(h)
+          PY_ENVELOPE
+          ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 \
+            ./build-sanitized/xorcist_fuzz_envelope /tmp/xorcist-fuzz-envelope -runs=3000 -max_len=64 -timeout=10
 
-#  signed-candidates:
-    name: Sign + verify M0 candidate artifacts (manual workflow only)
-    needs: [linux, windows, sanitizers-fuzz]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: xorcist-candidate-*
-          path: candidates
-          merge-multiple: true
-      - uses: sigstore/cosign-installer@v4.1.2
-      - name: Create and verify Sigstore signing bundles
-        shell: bash
-        env:
-          EXPECTED_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@${{ github.ref }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          candidates=(candidates/*.tar.gz candidates/*.zip)
-          if (( ${#candidates[@]} != 4 )); then
-            echo "Expected 3 Linux archives and 1 Windows ZIP; found ${#candidates[@]}" >&2
-            exit 1
-          fi
-          for artifact in "${candidates[@]}"; do
-            cosign sign-blob --yes --bundle "$artifact.sigstore.json" "$artifact"
-            cosign verify-blob "$artifact" --bundle "$artifact.sigstore.json" \
-              --certificate-identity "$EXPECTED_IDENTITY" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com
-          done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: xorcist-m0-signed-candidates
-          path: candidates/*
-          if-no-files-found: error
+# Signed release candidates remain deferred to M4. The previous draft used a
+# disabled job key with active child keys; that was not valid standalone CI.
+# Enable a separate signing job only after Linux/Windows distribution jobs,
+# artifact counts, identities and cosign verification are qualified.
