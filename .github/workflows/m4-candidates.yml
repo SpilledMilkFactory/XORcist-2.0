@@ -31,7 +31,7 @@ jobs:
             ca-certificates git g++ cmake ninja-build python3 dpkg-dev binutils \
             libssl-dev libgl1-mesa-dev libgl1-mesa-dri libx11-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev xvfb xauth
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure with pinned Dear ImGui / GLFW source revisions
         run: |
           cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release \
@@ -44,31 +44,67 @@ jobs:
           cmake --build build-release --parallel 2
           xvfb-run -a -s '-screen 0 1280x800x24' ctest --test-dir build-release --output-on-failure
           ./build-release/xorcist --help
-      - name: Build native DEB and deterministic installed-tree candidate
+      # Preserve diagnostic evidence even if packaging fails.
+      - name: Generate Debian package (CPack)
+        shell: bash
         env:
           SOURCE_DATE_EPOCH: '0'
         run: |
-          mkdir -p dist
-          cd build-release && cpack -G DEB && cd ..
-          cp build-release/*.deb dist/
-          python3 scripts/m4_audit_deb.py --deb dist/*.deb --platform '${{ matrix.label }}-amd64' --outdir dist --require-gui
-          (cd dist && sha256sum -c *.deb.sha256)
-          cmake --install build-release --prefix stage-m4
+          set -euo pipefail
+          mkdir -p dist/ci-logs
+          (cd build-release && cpack -G DEB --verbose) 2>&1 | tee dist/ci-logs/01-cpack.log
+          shopt -s nullglob
+          packages=(build-release/*.deb)
+          if (( ${#packages[@]} != 1 )); then
+            echo "::error::Expected one Debian package; found ${#packages[@]}" >&2
+            exit 1
+          fi
+          cp -- "${packages[0]}" dist/
+
+      - name: Audit Debian dependencies, GLIBC floor, and payload permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/m4_audit_deb.py --deb dist/*.deb \
+            --platform '${{ matrix.label }}-amd64' --outdir dist --require-gui \
+            2>&1 | tee dist/ci-logs/02-deb-audit.log
+          (cd dist && sha256sum -c ./*.deb.sha256) 2>&1 | tee dist/ci-logs/03-sha256.log
+
+      - name: Install candidate payload into a staging prefix
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --install build-release --prefix "$PWD/stage-m4" \
+            2>&1 | tee dist/ci-logs/04-install.log
+          test -x stage-m4/bin/xorcist
+          test -x stage-m4/bin/xorcist-gui
+
+      - name: Create and verify deterministic tar.gz candidate
+        shell: bash
+        env:
+          SOURCE_DATE_EPOCH: '0'
+        run: |
+          set -euo pipefail
           python3 scripts/package_candidate.py --stage stage-m4 --output-dir dist \
-            --platform '${{ matrix.label }}-amd64' --git-sha "$GITHUB_SHA" --format tar.gz
-          python3 scripts/check_candidate.py dist/*.tar.gz
-      - uses: actions/upload-artifact@v4
+            --platform '${{ matrix.label }}-amd64' --git-sha "$GITHUB_SHA" --format tar.gz \
+            2>&1 | tee dist/ci-logs/05-package-candidate.log
+          python3 scripts/check_candidate.py dist/*.tar.gz \
+            2>&1 | tee dist/ci-logs/06-verify-candidate.log
+
+      - name: Upload Linux candidate artifacts and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v5
         with:
           name: xorcist-m4-${{ matrix.label }}
-          path: dist/*
-          if-no-files-found: error
+          path: dist/
+          if-no-files-found: warn
           retention-days: 30
 
   windows-portable:
     name: Windows x64 MSVC static deps / ZIP
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Pin vcpkg registry and install static OpenSSL
         shell: pwsh
         run: |
