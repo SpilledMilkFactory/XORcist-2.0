@@ -28,7 +28,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git g++ cmake ninja-build python3 dpkg-dev binutils \
+            ca-certificates git g++ cmake ninja-build python3 dpkg-dev binutils file \
             libssl-dev libgl1-mesa-dev libgl1-mesa-dri libx11-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev xvfb xauth
       - uses: actions/checkout@v5
