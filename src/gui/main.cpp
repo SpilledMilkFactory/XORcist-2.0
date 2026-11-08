@@ -14,6 +14,9 @@
 #include <GLFW/glfw3.h>
 #include <openssl/crypto.h>
 #include <algorithm>
+#include <array>
+#include <cfloat>
+#include <cmath>
 #include <cstring>
 
 #include <charconv>
@@ -83,14 +86,14 @@ struct XorcistUI {
     std::future<std::string> m3_future;
     std::string m3_result;
     std::string m3_secure_result;
+    int active_tool = -1; // -1: dashboard, otherwise a tool page (0..11).
+    bool closing_tool = false;
+    float page_slide = 0.0f; // 0: off-screen below dashboard, 1: fully open.
 };
 
 template <typename Action> void safe_run(std::string& result, Action&& action) {
     try { result = action(); }
     catch (const std::exception& e) { result = std::string("Error: ") + e.what(); }
-}
-void show_text(const std::string& text) {
-    if (!text.empty()) ImGui::TextWrapped("%s", text.c_str());
 }
 template <typename Fn> void launch_diagnostic(XorcistUI& ui, Fn action) {
     if (ui.m2_future.valid()) return;
@@ -100,30 +103,115 @@ template <typename Fn> void launch_diagnostic(XorcistUI& ui, Fn action) {
         catch (const std::exception& error) { return std::string("Error: ") + error.what(); }
     });
 }
+struct ToolInfo {
+    const char* title;
+    const char* description;
+};
+
+// Navigation metadata only; the corresponding core operations are unchanged.
+constexpr std::array<ToolInfo, 12> tools{{
+    {"CIDR & IPv6 Networks", "Supernets, exact aggregation, inspection and overlaps"},
+    {"Network Relations & IP Ranges", "Containment, intersection and range-to-CIDR"},
+    {"IPv4 Subnet Splitting & VLSM", "Split subnets and allocate usable hosts"},
+    {"Network List Import & Export", "Convert newline lists and strict CSV files"},
+    {"DNS & System Information", "Forward/reverse DNS, interfaces and routes"},
+    {"Subnet Masks & ACL Helpers", "Netmasks, wildcard masks and ACL fragments"},
+    {"TCP Reachability", "Bounded connection checks to one numeric endpoint"},
+    {"Binary Data Tools", "Base64, hex, hexdumps, comparison and bitmasks"},
+    {"Authenticated File Encryption", "AES-256-GCM file encryption and verification"},
+    {"XOR Text & Hexadecimal", "Educational byte-wise XOR conversions"},
+    {"XOR Binary Files", "Reversible XOR transformations on binary files"},
+    {"Legacy Java File Recovery", "Recover original 2019 XORcist data files"},
+}};
+
+// Consume the remaining page height with a scrollable result area. There is
+// intentionally no fixed 160/185px output box and no change to result data.
+void result_panel(const char* label, const std::string& result) {
+    ImGui::Spacing();
+    ImGui::TextDisabled("%s", label);
+    const float remaining = ImGui::GetContentRegionAvail().y;
+    const float height = std::max(120.0f, remaining - 4.0f);
+    ImGui::BeginChild(label, ImVec2(0.0f, height), ImGuiChildFlags_Borders);
+    if (result.empty()) ImGui::TextDisabled("Results will appear here.");
+    else ImGui::TextUnformatted(result.c_str());
+    ImGui::EndChild();
+}
+
 void diagnostics_result(XorcistUI& ui) {
     if (ui.m2_future.valid()) ImGui::TextUnformatted("Working... (OS DNS queries may take time)");
     if (!ui.m2_result.empty() && ImGui::Button("Copy diagnostics result"))
         ImGui::SetClipboardText(ui.m2_result.c_str());
-    ImGui::BeginChild("Diagnostic output", ImVec2(0, 185), true);
-    ImGui::TextUnformatted(ui.m2_result.c_str());
+    result_panel("Diagnostic output", ui.m2_result);
+}
+
+// Tiles use custom foreground text drawing so titles wrap instead of being
+// clipped by the default ImGui::Button label renderer.
+void tool_tile(int index, float width, float height, bool enabled, XorcistUI& ui) {
+    ImGui::PushID(index);
+    ImGui::InvisibleButton("tile", ImVec2(width, height));
+    const bool hovered = ImGui::IsItemHovered();
+    const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    const ImVec2 lo = ImGui::GetItemRectMin();
+    const ImVec2 hi = ImGui::GetItemRectMax();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const ImU32 bg = IM_COL32(25, 42, 63, 255);
+    const ImU32 active = IM_COL32(39, 67, 98, 255);
+    const ImU32 border = IM_COL32(67, 98, 127, 255);
+    const ImU32 accent = IM_COL32(100, 178, 230, 255);
+    const float radius = 9.0f;
+    draw->AddRectFilled(lo, hi, hovered && enabled ? active : bg, radius);
+    draw->AddRect(lo, hi, hovered && enabled ? accent : border, radius, 0, 1.2f);
+    draw->AddRectFilled(ImVec2(lo.x + 12.0f, lo.y + 16.0f),
+        ImVec2(lo.x + 15.0f, hi.y - 16.0f), accent, 2.0f);
+    const float text_x = lo.x + 26.0f;
+    const float wrap_width = std::max(90.0f, width - 46.0f);
+    const float title_size = ImGui::GetFontSize() * 1.11f;
+    const auto title = tools[static_cast<std::size_t>(index)].title;
+    const float title_height = ImGui::GetFont()->CalcTextSizeA(title_size, FLT_MAX, wrap_width, title).y;
+    draw->AddText(ImGui::GetFont(), title_size, ImVec2(text_x, lo.y + 18.0f),
+        IM_COL32(236, 246, 255, 255), title, nullptr, wrap_width);
+    const auto subtitle = tools[static_cast<std::size_t>(index)].description;
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.88f,
+        ImVec2(text_x, lo.y + 21.0f + title_height + 9.0f),
+        IM_COL32(172, 198, 222, 255), subtitle, nullptr, wrap_width);
+    if (clicked && enabled) {
+        ui.active_tool = index;
+        ui.closing_tool = false;
+        ui.page_slide = 0.0f;
+    }
+    if (hovered) ImGui::SetTooltip("Open %s", title);
+    ImGui::PopID();
+}
+
+void dashboard(XorcistUI& ui, ImVec2 area) {
+    ImGui::BeginChild("Tools dashboard", area, ImGuiChildFlags_None);
+    ImGui::TextUnformatted("Select a tool");
+    ImGui::TextDisabled("Choose a category to open its dedicated workspace.");
+    ImGui::Spacing();
+    const float gap = 12.0f;
+    const float width = ImGui::GetContentRegionAvail().x;
+    const int columns = width >= 820.0f ? 3 : (width >= 540.0f ? 2 : 1);
+    const int rows = static_cast<int>((tools.size() + static_cast<std::size_t>(columns) - 1) /
+        static_cast<std::size_t>(columns));
+    const float tile_width = std::max(160.0f, (width - static_cast<float>(columns - 1) * gap) /
+        static_cast<float>(columns));
+    const float tile_height = std::clamp(
+        (ImGui::GetContentRegionAvail().y - gap * static_cast<float>(rows - 1) - 6.0f) /
+            static_cast<float>(rows), 116.0f, 152.0f);
+    const bool enabled = ui.active_tool == -1;
+    ImGui::BeginDisabled(!enabled);
+    for (std::size_t i = 0; i < tools.size(); ++i) {
+        if (i % static_cast<std::size_t>(columns) != 0) ImGui::SameLine(0.0f, gap);
+        tool_tile(static_cast<int>(i), tile_width, tile_height, enabled, ui);
+    }
+    ImGui::EndDisabled();
     ImGui::EndChild();
 }
-void draw(XorcistUI& ui) {
-    if (ui.m2_future.valid() &&
-        ui.m2_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
-        ui.m2_result = ui.m2_future.get();
-    if (ui.m3_future.valid() &&
-        ui.m3_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
-        ui.m3_secure_result = ui.m3_future.get();
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
-    ImGui::Begin("XORcist 2.0", nullptr, flags);
-    ImGui::TextUnformatted("XORcist 2.0 | Network planning + binary transformations");
-    ImGui::Separator();
-    if (ImGui::BeginTabBar("tools")) {
-        if (ImGui::BeginTabItem("CIDR / IPv6")) {
+
+void tool_contents(XorcistUI& ui, int tool) {
+    switch (tool) {
+        case 0: {
+
             ImGui::TextWrapped("IPv4 and IPv6 networks: one per line or separated by whitespace. # starts a comment. Aggregation requires a single address family.");
             ImGui::InputTextMultiline("Networks", ui.networks, sizeof(ui.networks), ImVec2(-1, 170));
             if (ImGui::Button("Smallest enclosing supernet")) {
@@ -163,10 +251,11 @@ void draw(XorcistUI& ui) {
             ImGui::Separator();
             if (!ui.network_result.empty() && ImGui::Button("Copy network result"))
                 ImGui::SetClipboardText(ui.network_result.c_str());
-            show_text(ui.network_result);
-            ImGui::EndTabItem();
+            result_panel("Network results", ui.network_result);
+            break;
         }
-        if (ImGui::BeginTabItem("Relations / Ranges")) {
+        case 1: {
+
             ImGui::TextWrapped("Use CIDR blocks for overlap, intersection and route coverage. Ranges use inclusive host IP endpoints.");
             ImGui::InputText("CIDR A", ui.relation_a, sizeof(ui.relation_a));
             ImGui::InputText("CIDR B", ui.relation_b, sizeof(ui.relation_b));
@@ -212,10 +301,11 @@ void draw(XorcistUI& ui) {
             ImGui::Separator();
             if (!ui.relation_result.empty() && ImGui::Button("Copy relation result"))
                 ImGui::SetClipboardText(ui.relation_result.c_str());
-            show_text(ui.relation_result);
-            ImGui::EndTabItem();
+            result_panel("Network relationship results", ui.relation_result);
+            break;
         }
-        if (ImGui::BeginTabItem("IPv4 Split / VLSM")) {
+        case 2: {
+
             ImGui::TextWrapped("Split a parent subnet, or allocate IPv4 blocks for conventional usable host counts (network/broadcast reserved). Largest request is placed first.");
             ImGui::InputText("Parent CIDR", ui.vlsm_parent, sizeof(ui.vlsm_parent));
             ImGui::InputText("New prefix", ui.split_prefix, sizeof(ui.split_prefix));
@@ -259,10 +349,11 @@ void draw(XorcistUI& ui) {
             ImGui::Separator();
             if (!ui.allocation_result.empty() && ImGui::Button("Copy allocation result"))
                 ImGui::SetClipboardText(ui.allocation_result.c_str());
-            show_text(ui.allocation_result);
-            ImGui::EndTabItem();
+            result_panel("Subnet planning results", ui.allocation_result);
+            break;
         }
-        if (ImGui::BeginTabItem("List Import / Export")) {
+        case 3: {
+
             ImGui::TextWrapped("Convert network lists between plain text and strict one-column CSV (cidr header). Output files must not already exist.");
             ImGui::InputText("Input file", ui.list_input, sizeof(ui.list_input));
             ImGui::InputText("Output file", ui.list_output, sizeof(ui.list_output));
@@ -277,10 +368,12 @@ void draw(XorcistUI& ui) {
                     return "Wrote " + std::to_string(items.size()) + " networks to " + ui.list_output;
                 });
             }
-            show_text(ui.import_result);
-            ImGui::EndTabItem();
+            ImGui::Separator();
+            result_panel("Import / export results", ui.import_result);
+            break;
         }
-        if (ImGui::BeginTabItem("M2 DNS / System")) {
+        case 4: {
+
             ImGui::TextWrapped("System DNS resolver; responses are timestamped, not authoritative DNS diagnostics. Read-only OS interface and route snapshots.");
             ImGui::InputText("DNS name", ui.m2_host, sizeof(ui.m2_host));
             if (ImGui::Button("Resolve A + AAAA") && !ui.m2_future.valid()) {
@@ -309,9 +402,10 @@ void draw(XorcistUI& ui) {
             if (ImGui::Button("List routes") && !ui.m2_future.valid())
                 launch_diagnostic(ui, [] { return xorcist::diagnostics::format(xorcist::diagnostics::routes()); });
             diagnostics_result(ui);
-            ImGui::EndTabItem();
+            break;
         }
-        if (ImGui::BeginTabItem("M2 Masks / ACL")) {
+        case 5: {
+
             ImGui::TextWrapped("Contiguous IPv4 netmask/wildcard conversion. ACL output is a Cisco-like match fragment, NOT a complete policy rule.");
             ImGui::InputText("Netmask", ui.m2_mask, sizeof(ui.m2_mask));
             if (ImGui::Button("Convert netmask") && !ui.m2_future.valid()) safe_run(ui.m2_result, [&] {
@@ -326,9 +420,10 @@ void draw(XorcistUI& ui) {
                 return std::string("Cisco-like match fragment: ") + xorcist::diagnostics::acl_match(ui.m2_acl);
             });
             diagnostics_result(ui);
-            ImGui::EndTabItem();
+            break;
         }
-        if (ImGui::BeginTabItem("M2 TCP Reachability")) {
+        case 6: {
+
             ImGui::TextWrapped("Explicit TCP connect to ONE numeric address and port; not ICMP ping. No host discovery or subnet scanning. Maximum 5 connections and 10s configured budget.");
             ImGui::InputText("Numeric IPv4/IPv6", ui.m2_ip, sizeof(ui.m2_ip));
             ImGui::InputInt("TCP port", &ui.m2_port);
@@ -350,9 +445,10 @@ void draw(XorcistUI& ui) {
                 });
             }
             diagnostics_result(ui);
-            ImGui::EndTabItem();
+            break;
         }
-        if (ImGui::BeginTabItem("Data / Binary Tools")) {
+        case 7: {
+
             ImGui::TextWrapped("Offline binary inspection, comparison and encoding. Base64/hex conversion files are limited to 16 MiB; existing outputs are never overwritten.");
             ImGui::InputText("Input file##m3", ui.m3_input, sizeof(ui.m3_input));
             ImGui::InputText("Output file##m3", ui.m3_output, sizeof(ui.m3_output));
@@ -413,12 +509,11 @@ void draw(XorcistUI& ui) {
             }
             if (!ui.m3_result.empty() && ImGui::Button("Copy data result"))
                 ImGui::SetClipboardText(ui.m3_result.c_str());
-            ImGui::BeginChild("Data output", ImVec2(0, 160), true);
-            ImGui::TextUnformatted(ui.m3_result.c_str());
-            ImGui::EndChild();
-            ImGui::EndTabItem();
+            result_panel("Data output", ui.m3_result);
+            break;
         }
-        if (ImGui::BeginTabItem("Authenticated Files")) {
+        case 8: {
+
             ImGui::TextWrapped("AES-256-GCM, scrypt, randomized salt/nonce and authenticated versioned header. Passwords are never logged. Incorrect passwords and tampering never publish plaintext.");
             ImGui::InputText("Input file##secure", ui.m3_secure_input, sizeof(ui.m3_secure_input));
             ImGui::InputText("Output file##secure", ui.m3_secure_output, sizeof(ui.m3_secure_output));
@@ -458,11 +553,12 @@ void draw(XorcistUI& ui) {
                     });
             }
             ImGui::Separator();
-            show_text(ui.m3_secure_result);
             ImGui::TextWrapped("Use a strong unique passphrase (12+ bytes). The passphrase is not recoverable. Do not place secrets in file paths. Output files must not already exist.");
-            ImGui::EndTabItem();
+            result_panel("Authenticated file results", ui.m3_secure_result);
+            break;
         }
-        if (ImGui::BeginTabItem("XOR Text / Hex")) {
+        case 9: {
+
             ImGui::TextWrapped("Binary XOR demonstration ONLY. Repeating-key XOR provides NO modern cryptographic security or integrity.");
             ImGui::InputText("Key (hexadecimal)", ui.key, sizeof(ui.key));
             ImGui::InputTextMultiline("Text (UTF-8 bytes)", ui.text, sizeof(ui.text), ImVec2(-1, 100));
@@ -485,10 +581,11 @@ void draw(XorcistUI& ui) {
                 });
             }
             ImGui::Separator();
-            show_text(ui.xor_result);
-            ImGui::EndTabItem();
+            result_panel("XOR text / hex results", ui.xor_result);
+            break;
         }
-        if (ImGui::BeginTabItem("XOR File")) {
+        case 10: {
+
             ImGui::TextWrapped("XOR any binary file. The same key reverses the transform. Existing output files are never overwritten.");
             ImGui::InputText("Input file path", ui.file_in, sizeof(ui.file_in));
             ImGui::InputText("Output file path", ui.file_out, sizeof(ui.file_out));
@@ -501,10 +598,11 @@ void draw(XorcistUI& ui) {
                 });
             }
             ImGui::Separator();
-            show_text(ui.file_result);
-            ImGui::EndTabItem();
+            result_panel("XOR file results", ui.file_result);
+            break;
         }
-        if (ImGui::BeginTabItem("Import 2019 Java Data")) {
+        case 11: {
+
             ImGui::TextWrapped("Reads original Java RandomAccessFile.writeUTF() keys.dat + cipherText.dat. Never treats XOR as secure encryption.");
             ImGui::InputText("Original keys.dat", ui.legacy_keys, sizeof(ui.legacy_keys));
             ImGui::InputText("Original cipherText.dat", ui.legacy_cipher, sizeof(ui.legacy_cipher));
@@ -516,13 +614,83 @@ void draw(XorcistUI& ui) {
                 });
             }
             ImGui::Separator();
-            show_text(ui.legacy_result);
-            ImGui::EndTabItem();
+            result_panel("Legacy recovery results", ui.legacy_result);
+            break;
         }
-        ImGui::EndTabBar();
+        default: break;
+    }
+}
+
+
+void draw(XorcistUI& ui) {
+    if (ui.m2_future.valid() &&
+        ui.m2_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        ui.m2_result = ui.m2_future.get();
+    if (ui.m3_future.valid() &&
+        ui.m3_future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        ui.m3_secure_result = ui.m3_future.get();
+
+    // State advances once per rendered frame; no timers, threads or OS hooks.
+    if (ui.active_tool >= 0) {
+        const float delta = std::clamp(ImGui::GetIO().DeltaTime / 0.28f, 0.0f, 1.0f);
+        ui.page_slide = std::clamp(ui.page_slide + (ui.closing_tool ? -delta : delta), 0.0f, 1.0f);
+        if (ui.closing_tool && ui.page_slide <= 0.0f) {
+            ui.active_tool = -1;
+            ui.closing_tool = false;
+        }
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    ImGui::Begin("XORcist 2.0", nullptr, flags);
+    ImGui::TextUnformatted("XORcist 2.0");
+    ImGui::SameLine();
+    ImGui::TextDisabled("  Network planning  /  diagnostics  /  binary tools");
+    ImGui::Separator();
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+    dashboard(ui, available);
+
+    if (ui.active_tool >= 0) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape) && ui.page_slide >= 1.0f)
+            ui.closing_tool = true;
+        // The page is full-sized and moves upward from below the dashboard.
+        // The parent window clips its off-screen portion during the transition.
+        const float eased = 1.0f - std::pow(1.0f - ui.page_slide, 3.0f);
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + available.y * (1.0f - eased)));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(17, 26, 39, 255));
+        ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(65, 100, 130, 255));
+        if (ImGui::BeginChild("Tool page", available, ImGuiChildFlags_Borders,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            const auto& info = tools[static_cast<std::size_t>(ui.active_tool)];
+            ImGui::TextUnformatted(info.title);
+            ImGui::SameLine();
+            const float close_width = 36.0f;
+            ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
+                ImGui::GetWindowContentRegionMax().x - close_width));
+            if (ImGui::Button("X##close page", ImVec2(close_width, 27.0f)) &&
+                !ui.closing_tool && ui.page_slide >= 1.0f)
+                ui.closing_tool = true;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Close tool and return to tiles");
+            ImGui::TextDisabled("%s", info.description);
+            ImGui::Separator();
+            ImGui::BeginChild("Tool controls", ImVec2(0, 0), ImGuiChildFlags_None);
+            // Keep page contents visible while sliding, but prevent operations
+            // until the transition has finished.
+            ImGui::BeginDisabled(ui.page_slide < 1.0f || ui.closing_tool);
+            tool_contents(ui, ui.active_tool);
+            ImGui::EndDisabled();
+            ImGui::EndChild();
+        }
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
     }
     ImGui::End();
 }
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -546,6 +714,13 @@ int main(int argc, char** argv) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+    auto& style = ImGui::GetStyle();
+    style.WindowPadding = ImVec2(12.0f, 10.0f);
+    style.FramePadding = ImVec2(9.0f, 5.0f);
+    style.ItemSpacing = ImVec2(9.0f, 7.0f);
+    style.FrameRounding = 5.0f;
+    style.ChildRounding = 7.0f;
+    style.ScrollbarRounding = 5.0f;
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
         ImGui::DestroyContext(); glfwDestroyWindow(window); glfwTerminate(); return 1;
     }

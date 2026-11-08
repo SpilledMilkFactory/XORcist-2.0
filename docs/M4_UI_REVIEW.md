@@ -5,7 +5,8 @@ where available. Capture *redacted* screenshots of the main window and
 important dialogs. Include evidence outside the repository if screenshots
 contain private network addresses or file paths.
 
-- All tabs visible or reachable, no clipped labels or unintelligible tooltips.
+- All 12 dashboard tiles are visible at 1050×720, with full category names and no clipping; smaller windows can scroll the tile grid.
+- Tool workspaces slide up from below, cover the dashboard, show all existing controls, and return via the X or Escape key.
 - Keyboard navigation, tab focus, password input masking, Escape/close,
   high-contrast text and predictable errors. Record shortcomings explicitly;
   Dear ImGui is not guaranteed equivalent to native screen-reader accessibility.
