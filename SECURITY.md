@@ -1,128 +1,48 @@
-# Security policy and threat model
+# Security policy
 
-## Scope of this baseline
-
-XORcist 2.0 includes network planning, a binary XOR demonstration, and M3 authenticated-file encryption.
-The XOR functionality is not a confidential or integrity-protecting file encryption solution.
-Repeating-key XOR is inappropriate for credentials, production secrets, backups, or sensitive data; use M3 authenticated mode rather than XOR for confidential files.
-
-* Repeating-key XOR leaks structure and enables plaintext recovery if an attacker knows or guesses data; it is not authenticated.
-* Keys passed via `--key-hex` can appear in shell history, process arguments and logs. GUI key fields are also not secret-management tools.
-* The program never generates or claims to generate strong random encryption keys.
-* Legacy Java files are treated as untrusted input and size-limited to 16 MiB. The new network-list import reads only explicitly selected paths and limits inputs to 1 MiB. File conversion exclusively creates a new output and refuses overwrite.
-* XOR file outputs are exclusively created (never overwritten), opened mode 0600 on POSIX; incomplete outputs are deleted on detected read/write errors. The operating system still controls directory permissions and backups.
-* The CLI escapes control bytes when printing recovered legacy plaintext, to reduce terminal escape/injection risk.
-* IPv4 octets, IPv6 hextets/compression and prefix lengths (/0..32 and /0..128) are validated. IPv6 scope/zone identifiers, noncanonical IPv4 leading-zero octets and multi-column/quoted CSV are rejected.
-* Network lists are limited to 1 MiB and 50,000 entries; GUI text buffers have explicit limits. `net split` limits output to 65,536 networks (GUI 1,024), VLSM accepts at most 4,096 named host requirements, and pairwise overlap reporting accepts at most 1,024 networks and 100,000 conflict pairs.
-* VLSM allocations are local calculations only. They do not create routes or manipulate network interfaces. Traditional usable-host counts reserve network and broadcast addresses, even for host counts that might otherwise be served by explicit /31 point-to-point links.
-
-## Not in scope yet
-
-No OS-managed secret vault, hardware-backed key custody, IPv6 zone-aware interface routing, packet capture, privilege elevation, broad network discovery or scanning is included. M2 introduces opt-in single-endpoint TCP connection checks, which are active traffic but are not ICMP ping or a scan engine.
-M3 implements a versioned AEAD container through OpenSSL 3 EVP and scrypt. This has not undergone independent security review; do not characterize it as formally audited or certified.
+XORcist is a network-planning and binary-data utility that includes both **educational repeating-key XOR** and a **separate authenticated file-encryption mode**. These have different security properties.
 
 ## Reporting vulnerabilities
 
-Please report issues privately to the repository owner using GitHub's private vulnerability reporting feature (if enabled). Avoid posting secret-bearing files in public issues.
+Please avoid disclosing an exploitable issue in a public GitHub issue. Use the repository's **GitHub private vulnerability reporting** feature if it is enabled, or contact the maintainer privately through an established contact channel. Do not attach sensitive plaintext, passphrases, or private network inventories to public reports.
 
-## M0 qualification and supply-chain boundaries
+Provide the affected version/commit, platform, reproducible steps, expected/observed behavior, and a minimal non-sensitive reproducer. No response-time SLA or security certification is implied.
 
-The M0 candidate packaging process provides a SHA-256-verified artifact inventory and optional
-Sigstore keyless signatures for archives produced by GitHub Actions. A signed archive proves
-integrity and a verified CI identity, **not** that the code is secure or independently reviewed.
+## Supported versions and scope
 
-The packaged SPDX 2.3 manifest lists staged files and declared direct dependencies; it does
-not resolve every distro-supplied system library, transitive dependency, OpenGL implementation,
-or GPU driver. The CMake lock pins fetched Dear ImGui/GLFW Git commits, not distro versions,
-compiler packages or operating-system images.
+The latest published release is **v2.0.0**; the `main` branch may contain unreleased changes. Security fixes, if needed, will be evaluated for the current release and development branch. Older versions are not guaranteed ongoing backports. Check [GitHub Releases](https://github.com/SpilledMilkFactory/XORcist-2.0/releases) for the latest version and security announcements.
 
-Output files are created exclusively and ordinary write failures are cleaned up, but these
-operations are not transactional or durable against abrupt process termination or power loss.
-The tool does not defend against hostile processes changing directory entries concurrently;
-use a trusted working directory. It has not received a third-party security audit.
+XORcist is **not independently security-audited**, penetration-tested to a certification standard, or a replacement for a dedicated secret-management system. Automated tests, SBOMs, and signed builds do not constitute such a review.
 
-GUI smoke tests create a hidden OpenGL context and render two frames. They do not test a
-human-usable display or every GPU implementation. Windows runtimes, driver compatibility and
-portable packaging require separate evidence under `docs/M0_ACCEPTANCE.md`.
+## Encryption versus XOR
 
-## M2 DNS / inventory / TCP probe security boundaries
+**Repeating-key XOR is not secure encryption.** It has no authentication, leaks plaintext structure, and can expose content through key reuse or known plaintext. The `xor` commands are intended only for demonstrations and binary transformations. Keys supplied using `--key-hex` can be visible in shell history, process arguments, and logs.
 
-* DNS A/AAAA lookups use the operating system resolver (`getaddrinfo`), and PTR uses
-  `getnameinfo`. Requests require explicit user action. DNS queries may be observable by
-  configured resolvers and upstream providers, subject to OS privacy policies. Results are
-  timestamped, not authenticated, and may be cached or changed; DNSSEC is not verified here.
-* System DNS APIs do **not** expose a portable deadline. OS resolver stalls may exceed
-  requested UI interaction times. The GUI dispatches queries off the rendering thread,
-  but shutdown while an async resolver is still running can wait for that operation.
-* Read-only local interfaces/routes can reveal private IP addresses, interface names,
-  default gateways, and routing configuration. Copying/saving or sharing CLI output may
-  expose sensitive network topology. Interface enumeration is not an authenticated
-  inventory and routing snapshots can omit policy rules and non-main tables.
-* TCP reachability requires a single **numeric** address and explicit destination port.
-  It cannot take hostname lists, CIDRs or broad ranges. Count 1..5, timeout 100..2000 ms,
-  interval 200..2000 ms, and a maximum configured budget of 10 seconds are validated.
-  Probe attempts make ordinary outbound TCP connections, which may be logged or trigger
-  monitoring on the selected host; only test hosts/ports you are authorized to access.
-  A `refused` connection indicates a refusal, not a successful application-level probe;
-  firewalls or OS/network behavior can make all outcomes ambiguous.
-* ACL output is a **Cisco-like address-match fragment only**, not a deployable firewall
-  command, a vetted device-specific ACL, or a policy correctness guarantee. Confirm
-  address order, protocol, action, direction, and target platform syntax independently.
-* Linux route inventory reads `/proc/net/route` and `/proc/net/ipv6_route`; systems without
-  these interfaces or with restricted visibility may report errors. Windows adapters/routes
-  use native OS APIs, but must be compiled and checked during deferred release qualification.
+For authenticated files, the separate `secure` commands use **OpenSSL 3.x AES-256-GCM** with a key derived by **scrypt**. Version 1 of `.xorc3` includes a 64-byte authenticated header, randomly generated 16-byte salt and 12-byte nonce, and a 16-byte authentication tag. The header records KDF settings (N=32768, r=8, p=1), and the current implementation limits plaintext size to 32 GiB per generated nonce. The format is specified in [docs/M3_FILE_FORMAT.md](docs/M3_FILE_FORMAT.md).
 
+New encryption requires a passphrase of **12–4096 bytes**. Minimum length is **not** a guarantee of entropy; use an unpredictable passphrase. XORcist cannot recover lost passphrases. Interactive CLI entry hides terminal echo; `--password-stdin` is intended only for trusted automation. Do not place real passwords in command-line arguments, environment dumps, shell history, or shared scripts. GUI password entry is masked, but process-memory and OS-level exposure are not eliminated.
 
-## M3 authenticated-file encryption threat model
+### Important file-handling limitations
 
-* The `secure` command uses OpenSSL 3.x `EVP_aes_256_gcm` authenticated encryption,
-  random 16-byte scrypt salt, random 12-byte GCM nonce and 16-byte tag.
-  Format version 1 has an exactly 64-byte authenticated header (`XORC3AE1`,
-  version/algorithm/KDF IDs, scrypt N=32768/r=8/p=1, salt, nonce, plaintext
-  length, reserved zeros), followed by ciphertext and tag. Header bytes are
-  AEAD associated data. Unknown versions, unsupported KDF values, excessive
-  sizes and unexpected lengths are rejected before costly derivation.
-* New encryptions require a passphrase of 12..4096 bytes. Length alone does not
-  guarantee sufficient entropy: choose a genuinely unpredictable passphrase.
-  The passphrase is **not** recoverable; a lost passphrase means lost plaintext.
-  scrypt slows offline guessing but cannot compensate for weak choices.
-* The interactive CLI disables terminal echo and does not accept passwords in
-  argv. `--password-stdin` is intended for controlled scripts; supplying
-  secrets from shell literals, environment variables, logs or world-readable
-  files can leak passwords. The GUI has a masked passphrase field, cleared on
-  submission. Copies may remain in OS process memory; no memory-lock guarantee.
-* The CLI and GUI never publish a decrypted output until the OpenSSL GCM
-  authentication final check succeeds. Intermediate plaintext is written into
-  an exclusive temporary file with POSIX mode 0600 in the destination directory
-  and removed on caught errors. POSIX publication uses `link()` so it cannot
-  overwrite an existing path; Windows uses a move without replace. The
-  destination is never overwritten. Do not operate in adversarial directories:
-  file permissions and concurrent filesystem interference are OS-dependent.
-* Crash, SIGKILL, power failure or malware can leave a **temporary plaintext
-  file** in the chosen directory. Encryption does not provide secure deletion
-  of plaintext, swap, crash dumps, backups, or filesystem journals. Prefer
-  encrypted disks for sensitive working directories. File metadata, filename,
-  plaintext length (and KDF parameters) are **not hidden** by the container.
-* GCM version 1 deliberately limits plaintext to 32 GiB per independently
-  generated nonce. The code does not support append, resume, partial decryption,
-  external associated data, recipient public keys, or a password recovery agent.
-  A filename extension does not imply trusted format.
-* Data Base64/hex tools are reversible **encodings**, not cryptography; the
-  in-memory file conversions are limited to 16 MiB. `data diff` streams 64 KiB
-  blocks and prints bounded offsets but counts all differing byte positions.
-* OpenSSL is a runtime security dependency; track security advisories, versions
-  and provider availability before M4 release qualification. No third-party
-  security assessment or independent formal verification is claimed.
+- Authentication is checked before a successfully decrypted output is published. Wrong passwords and modified container contents are rejected; output paths are not silently overwritten.
+- Decryption writes intermediate plaintext to a private temporary file in the destination directory. A process crash, forced termination, or power failure **may leave temporary plaintext**; encryption does not provide secure deletion of swap, backups, journals, or other plaintext copies. Use a trusted directory on an encrypted disk for sensitive work.
+- The implementation is not designed to defend against hostile processes racing changes to directory entries or files in an adversarial directory.
+- Container metadata can reveal length, algorithm, and KDF settings. Filenames, filesystem metadata, and surrounding operating-system records are not hidden by encryption.
+- Files are not encrypted in place. Output creation is exclusive, and caught failures attempt cleanup. This is not a guarantee of crash-safe durability.
 
-## M4 distribution candidate boundaries
+The educational Java `.dat` importer is **decode-only** and bounded to 16 MiB; it is not a secure-cryptography compatibility format.
 
-Native Linux DEB packages declare OS-managed shared-library dependencies rather
-than bundling an unmaintained copy of libcrypto. Windows uses statically linked
-vcpkg OpenSSL/GLFW and MSVC runtime; Windows system DLLs are not bundled.
-Static linking means security fixes to OpenSSL require **rebuilding and
-redistributing** the Windows candidate. Candidate archive SHA-256 and Sigstore
-bundles protect artifact integrity/provenance, not correctness or vulnerability
-freedom. Real Windows 10/11 and distro install/launch checks are required
-before public release sign-off. Tests do not cover hostile filesystem races,
-all possible interrupted-decryption cleanup, or a cryptographic third-party
-audit; do not describe the software as independently security certified.
+## Networking and local data
+
+- CIDR calculations, subnet splitting, VLSM, and network-list conversions operate on input data and **do not modify live network configuration**. IPv4/IPv6 parsing and output counts are bounded; unsupported IPv6 scope identifiers and noncanonical IPv4 forms are rejected.
+- Local interface and route inventory is **read-only**, but its output may reveal private addresses, host interface names, gateways, and topology. Do not publish sensitive diagnostic output or unredacted screenshots.
+- DNS/reverse DNS queries use the operating system resolver. Results may be cached, observed upstream, or altered and are **not independently authenticated** by XORcist. Resolver operations have no portable hard timeout; slow DNS can delay GUI task completion or shutdown.
+- TCP reachability is **active** and opt-in: a single numeric endpoint and explicit port, 1–5 attempts, 100–2000 ms timeout, 200–2000 ms interval, and at most a 10-second configured budget. It is not ICMP ping or a general scanner. Only probe systems you are authorized to contact.
+- ACL helpers emit address-match fragments, **not** complete validated firewall rules. Verify protocol, action, direction, address ordering, and device syntax before deployment.
+- Text and binary conversions have bounded input/output limits. Base64/hex are **encodings**, not confidentiality measures.
+
+## Dependency and release security
+
+Linux builds dynamically link distribution-managed libraries, including OpenSSL. Windows x64 release candidates statically link OpenSSL and other selected dependencies; **security updates to a statically linked library require rebuilding and redistributing the Windows package**. The exact direct dependencies and notices are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Release workflows generate package audits, SPDX inventories, SHA-256 checksums, and Sigstore provenance bundles. Verify downloaded assets against the matching release evidence using [docs/M4_RELEASE_GUIDE.md](docs/M4_RELEASE_GUIDE.md). These attest to artifact identity and integrity, not vulnerability freedom, runtime safety on every machine, or a formal cryptographic audit.
