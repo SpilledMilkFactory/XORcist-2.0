@@ -8,3 +8,8 @@ set(XORCIST_GLFW_COMMIT "7b6aead9fb88b3623e3b3725ebb42670cbe4c579")
 # OpenSSL 3.x is an OS/vcpkg-supplied binary dependency, NOT source-pinned.
 # The minimum version is an API compatibility floor, not a reproducible binary lock.
 set(XORCIST_OPENSSL_MIN_VERSION "3.0")
+
+# M4 Windows release candidate: pinned immutable vcpkg registry tag.
+# Record git rev-parse HEAD and exact OpenSSL port/patches in stage metadata.
+set(XORCIST_WINDOWS_VCPKG_TAG "2026.10.16")
+set(XORCIST_WINDOWS_VCPKG_TRIPLET "x64-windows-static")

@@ -40,7 +40,7 @@ See [`M2_ACCEPTANCE.md`](M2_ACCEPTANCE.md). System inventory is read-only; bound
 
 ## M3 — Robust data tools
 
-**Development status: IMPLEMENTED; awaiting owner Ubuntu 26.04 CLI/GUI verification.**
+**Development status: COMPLETE for Ubuntu 26.04 local verification (owner-reported, November 7, 2026).**
 See [`M3_ACCEPTANCE.md`](M3_ACCEPTANCE.md).
 
 
@@ -49,6 +49,12 @@ See [`M3_ACCEPTANCE.md`](M3_ACCEPTANCE.md).
 - Versioned file containers and authentication, controlled key handling, and fuzz tests.
 
 ## M4 — Distribution
+
+**Implementation status: Candidate packaging and audit infrastructure prepared;**
+**release qualification NOT complete**. CI, Windows hardware, signed-candidate
+verification and UI evidence must be supplied before the public release.
+See [`M4_ACCEPTANCE.md`](M4_ACCEPTANCE.md).
+
 
 - Debian release matrix with older glibc/runtime gates; dependency inventory per target.
 - Windows portable x64 release, DLL inventory, license notices and provenance.

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=XORcist 2.0
+GenericName=Network Planning and Binary Data Tools
+Comment=Network planning, read-only diagnostics and authenticated file tools
+Exec=xorcist-gui
+TryExec=xorcist-gui
+Icon=network-workgroup
+Terminal=false
+Categories=Network;Utility;
+Keywords=IPv6;CIDR;VLSM;DNS;AES;

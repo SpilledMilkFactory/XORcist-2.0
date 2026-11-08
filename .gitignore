@@ -42,3 +42,11 @@ crash-*
 leak-*
 timeout-*
 build-m0-corpus/
+
+# M4 cloned toolchain and package evidence
+vcpkg/
+*.deb
+*.sigstore.json
+*.spdx.json
+__pycache__/
+*.pyc

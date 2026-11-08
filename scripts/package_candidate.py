@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create deterministic candidate archives + SPDX 2.3 file/dependency inventory.
 
-This is a development release CANDIDATE, not a certification of binaries.
+This is an M4 release CANDIDATE, not a certification of binaries.
 The SBOM covers installed files and declared direct source/system dependencies;
 it is not a recursive OS-wide vulnerability/component inventory.
 """
@@ -40,12 +40,12 @@ def deps() -> dict[str, str]:
 
 def manifest(stage: Path, platform: str, commit: str) -> dict:
     return {
-        'schema': 'xorcist.m0.candidate.v1',
+        'schema': 'xorcist.m4.candidate.v1',
         'platform': platform,
         'source_commit': commit,
         'source_dependency_lock': deps(),
-        'scope': 'Installed XORcist files only; platform runtime libraries are NOT bundled or exhaustively inventoried.',
-        'runtime_note': 'Check installed executables with ldd (Linux) or dumpbin /DEPENDENTS (Windows).',
+        'scope': 'Installed XORcist files and declared direct libraries only; OS runtime closure NOT exhaustively inventoried.',
+        'runtime_note': 'See *.runtime.json for distro DEB ELF imports, WINDOWS_IMPORTS.json for Windows candidate, and third-party notices.',
     }
 
 
@@ -65,7 +65,7 @@ def sbom(stage: Path, platform: str, epoch: int) -> dict:
                               'relationshipType': 'CONTAINS'})
     pkg_verification = hashlib.sha1(''.join(sorted(hashlib.sha1(p.read_bytes()).hexdigest() for p in files)).encode()).hexdigest()
     installed_pkg = {
-        'SPDXID': 'SPDXRef-XORcist', 'name': 'XORcist', 'versionInfo': '2.0.0-m0-candidate',
+        'SPDXID': 'SPDXRef-XORcist', 'name': 'XORcist', 'versionInfo': '2.0.0-m4-candidate',
         'downloadLocation': 'NOASSERTION', 'filesAnalyzed': True,
         'packageVerificationCode': {
             'packageVerificationCodeValue': pkg_verification,
@@ -78,7 +78,8 @@ def sbom(stage: Path, platform: str, epoch: int) -> dict:
         ('Dear-ImGui', deps()['XORCIST_IMGUI_VERSION'], deps()['XORCIST_IMGUI_COMMIT'], 'MIT'),
         ('GLFW', deps()['XORCIST_GLFW_VERSION'], deps()['XORCIST_GLFW_COMMIT'], 'Zlib'),
         ('OpenGL-system-runtime', 'OS-supplied', 'NOASSERTION', 'NOASSERTION'),
-        ('OpenSSL-libcrypto-system', deps().get('XORCIST_OPENSSL_MIN_VERSION', '>=3.0'), 'NOASSERTION', 'Apache-2.0'),
+        ('OpenSSL-static-vcpkg' if platform.startswith('windows') else 'OpenSSL-libcrypto-system',
+         deps().get('XORCIST_OPENSSL_MIN_VERSION', '>=3.0'), 'NOASSERTION', 'Apache-2.0'),
     ]
     packages = [installed_pkg]
     for i, (name, ver, commit, license_id) in enumerate(components):
@@ -99,11 +100,11 @@ def sbom(stage: Path, platform: str, epoch: int) -> dict:
                               'relatedSpdxElement': component_id, 'relationshipType': 'DEPENDS_ON'})
     return {
         'spdxVersion': 'SPDX-2.3', 'dataLicense': 'CC0-1.0', 'SPDXID': 'SPDXRef-DOCUMENT',
-        'name': 'XORcist-M0-' + platform,
+        'name': 'XORcist-M4-' + platform,
         'documentNamespace': 'https://spdx.org/spdxdocs/xorcist-' + namespace_hash,
         'creationInfo': {
             'created': datetime.fromtimestamp(epoch, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'creators': ['Tool: XORcist-package_candidate.py-1.0'],
+            'creators': ['Tool: XORcist-package_candidate.py-2.0'],
             'comment': 'SBOM of staged installed files and declared direct dependencies. OS runtime dependency closure not resolved.',
         },
         'documentDescribes': ['SPDXRef-XORcist'],
@@ -115,9 +116,9 @@ def package(source_stage: Path, output_dir: Path, platform: str, commit: str, ep
     if not source_stage.is_dir():
         raise ValueError(f'missing stage directory: {source_stage}')
     output_dir.mkdir(parents=True, exist_ok=True)
-    basename = f'XORcist-2.0.0-m0-candidate-{platform}'
+    basename = f'XORcist-2.0.0-m4-candidate-{platform}'
     archive = output_dir / f'{basename}.{fmt}'
-    with tempfile.TemporaryDirectory(prefix='xorcist-m0-') as tmp:
+    with tempfile.TemporaryDirectory(prefix='xorcist-m4-') as tmp:
         stage = Path(tmp) / basename
         shutil.copytree(source_stage, stage, symlinks=False)
         docs = stage / 'share/doc/xorcist'

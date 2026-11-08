@@ -113,3 +113,16 @@ portable packaging require separate evidence under `docs/M0_ACCEPTANCE.md`.
 * OpenSSL is a runtime security dependency; track security advisories, versions
   and provider availability before M4 release qualification. No third-party
   security assessment or independent formal verification is claimed.
+
+## M4 distribution candidate boundaries
+
+Native Linux DEB packages declare OS-managed shared-library dependencies rather
+than bundling an unmaintained copy of libcrypto. Windows uses statically linked
+vcpkg OpenSSL/GLFW and MSVC runtime; Windows system DLLs are not bundled.
+Static linking means security fixes to OpenSSL require **rebuilding and
+redistributing** the Windows candidate. Candidate archive SHA-256 and Sigstore
+bundles protect artifact integrity/provenance, not correctness or vulnerability
+freedom. Real Windows 10/11 and distro install/launch checks are required
+before public release sign-off. Tests do not cover hostile filesystem races,
+all possible interrupted-decryption cleanup, or a cryptographic third-party
+audit; do not describe the software as independently security certified.

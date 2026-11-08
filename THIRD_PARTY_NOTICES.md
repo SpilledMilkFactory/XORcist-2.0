@@ -40,3 +40,26 @@ Windows portable ZIP bundles OpenSSL DLLs, include the matching upstream license
 provider modules when required, and an inventory of DLLs with versions and hashes.
 The package-candidate SBOM declares OpenSSL as a direct system dependency, but is
 not a guarantee of complete runtime closure or security certification.
+
+## M4 package-specific notices
+
+Linux `.deb` files are built **inside their target distribution**. CPack
+`dpkg-shlibdeps` derives `Depends` from the linked ELF binaries (including the
+correct distribution OpenSSL runtime package name); do not manually claim a
+Debian 12 build will run on Ubuntu 26.04 or vice versa. The third-party
+licenses are installed under `/usr/share/doc/xorcist/third-party-licenses/`.
+
+The Windows x64 candidate uses MSVC `/MT` with pinned vcpkg registry tag
+`2026.10.16`, static OpenSSL (`x64-windows-static`) and pinned Dear ImGui / GLFW
+source. This is intended to avoid shipping third-party DLLs; the candidate
+build **fails** if an imported DLL outside its reviewed Windows system
+allowlist is found. The exact vcpkg OpenSSL copyright is copied into the
+portable ZIP, alongside the Apache License 2.0 text. System DLLs and Windows
+OpenGL remain OS-provided. License and binary inventories require fresh review
+whenever dependencies change.
+
+`docs/licenses/OPENSSL_APACHE-2.0.txt` is the complete Apache License Version
+2.0 text; the OpenSSL source distribution and installed vcpkg port may also
+contain specific attribution notices that are copied to the Windows package.
+Sigstore bundles are *candidate provenance metadata*, not proof of product
+security or a substitute for native Windows code signing / SmartScreen review.

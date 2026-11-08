@@ -294,3 +294,38 @@ will require explicit DLL/provider packaging and license review in M4.
 
 See [`docs/M3_ACCEPTANCE.md`](docs/M3_ACCEPTANCE.md) for local gates and
 [`docs/M3_FILE_FORMAT.md`](docs/M3_FILE_FORMAT.md) for the experimental envelope layout.
+
+
+## M4 — Candidate packaging and distribution (not yet release-qualified)
+
+`XORCIST_PACKAGE_DEB=ON` enables native Debian-family CPack packaging. Build
+on the **target distribution**. CPack detects OS-level runtime dependencies,
+including the distro-specific OpenSSL library; never reuse a package built on
+Debian 13 as the Debian 12 release. Set `XORCIST_INSTALL_DEV_FILES=OFF` for
+runtime-only packages. `xorcist` manpage and GUI `.desktop` entry are installed.
+
+For Ubuntu 26.04 (with system GLFW development files):
+
+```bash
+cmake -S . -B build-m4 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DXORCIST_BUILD_GUI=ON -DXORCIST_BUILD_TESTS=ON \
+  -DXORCIST_PACKAGE_DEB=ON -DXORCIST_INSTALL_DEV_FILES=OFF \
+  -DXORCIST_FETCH_GLFW=OFF
+cmake --build build-m4 --parallel
+ctest --test-dir build-m4 --output-on-failure
+(cd build-m4 && cpack -G DEB)
+```
+
+Windows x64 candidates are built with MSVC `/MT`, static OpenSSL (vcpkg
+`x64-windows-static`, pinned registry tag 2026.10.16), and pinned Dear ImGui
+and GLFW. Its portable ZIP includes a DLL-import audit and full copyright
+notices. No third-party DLLs should need redistributing; system DLL imports
+and graphics drivers still require real Windows 10/11 launch checks. The
+manual workflow `.github/workflows/m4-candidates.yml` builds candidate assets
+and signs them keylessly **only if all platform jobs pass**. It never
+publishes a GitHub Release automatically.
+
+Follow [`docs/M4_ACCEPTANCE.md`](docs/M4_ACCEPTANCE.md),
+[`docs/M4_HARDWARE_CHECKLIST.md`](docs/M4_HARDWARE_CHECKLIST.md),
+[`docs/M4_UI_REVIEW.md`](docs/M4_UI_REVIEW.md), and
+[`docs/M4_RELEASE_GUIDE.md`](docs/M4_RELEASE_GUIDE.md).
