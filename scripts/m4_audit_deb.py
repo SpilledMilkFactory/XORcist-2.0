@@ -8,10 +8,13 @@ trusted, newly built XORcist binary's --help command in CI.
 from __future__ import annotations
 import argparse
 import hashlib
+import io
 import json
 import pathlib
 import re
 import subprocess
+import stat
+import tarfile
 import tempfile
 from package_candidate import sbom
 
@@ -28,9 +31,38 @@ def sha256(path: pathlib.Path) -> str:
     return h.hexdigest()
 
 
+def validate_payload_modes(deb: pathlib.Path) -> None:
+    """Reject writable/special-mode package paths before extracting the DEB.
+
+    Directory permissions must not depend on the build runner's umask.
+    The package's /usr hierarchy is expected to have regular 0755 dirs.
+    """
+    archive = subprocess.run(
+        ['dpkg-deb', '--fsys-tarfile', str(deb)],
+        check=True, capture_output=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(archive), mode='r:') as tar:
+        seen = set()
+        for entry in tar:
+            parts = pathlib.PurePosixPath(entry.name).parts
+            if not parts or parts[0] != 'usr' or '..' in parts:
+                raise ValueError(f'unexpected DEB payload path: {entry.name!r}')
+            if entry.name in seen:
+                raise ValueError(f'duplicate DEB payload entry: {entry.name!r}')
+            seen.add(entry.name)
+            if not (entry.isdir() or entry.isfile() or entry.issym()):
+                raise ValueError(f'unsupported DEB payload object: {entry.name!r}')
+            if entry.mode & (stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX | stat.S_IWGRP | stat.S_IWOTH):
+                raise ValueError(
+                    f'unsafe DEB payload mode {entry.mode:04o}: {entry.name!r}; '
+                    'group/world writable or special mode bits are forbidden')
+            if entry.isdir() and (entry.mode & 0o777) != 0o755:
+                raise ValueError(f'nonstandard DEB directory mode {entry.mode:04o}: {entry.name!r}')
+
+
 def audit(deb: pathlib.Path, platform: str, dest: pathlib.Path, require_gui: bool = False) -> None:
     if not deb.is_file() or deb.suffix != '.deb':
         raise ValueError('expected a built .deb file')
+    validate_payload_modes(deb)
     dest.mkdir(parents=True, exist_ok=True)
     control = cmd('dpkg-deb', '--field', str(deb))
     fields = dict(re.findall(r'^([A-Za-z-]+):\s*(.*)$', control, flags=re.MULTILINE))
@@ -91,7 +123,7 @@ def audit(deb: pathlib.Path, platform: str, dest: pathlib.Path, require_gui: boo
         (dest / (deb.name + '.runtime.json')).write_text(
             json.dumps(inventory, sort_keys=True, indent=2) + '\n', encoding='utf-8')
     (dest / (deb.name + '.sha256')).write_text(f'{sha256(deb)}  {deb.name}\n', encoding='ascii')
-    print(f'PASS: {deb.name} control, ELF dependency & glibc gates, man page, SPDX inventory' + (', desktop entry' if require_gui else ''))
+    print(f'PASS: {deb.name} payload permissions, control, ELF dependencies & glibc gates, man page, SPDX inventory' + (', desktop entry' if require_gui else ''))
 
 
 if __name__ == '__main__':

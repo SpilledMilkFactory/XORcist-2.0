@@ -14,6 +14,9 @@ Previous M0–M3 *local* milestones remain complete. M4's criteria are additive.
    `dpkg-deb`, `ldd`, and `readelf` confirm runtime imports and GLIBC symbol ceilings. Confirm `Depends`
    contains distro-appropriate OpenSSL, libc/libstdc++ and GUI dependencies.
    Install/upgrade/remove via apt **inside each target distro** before release.
+   Verify every installed `/usr` directory has mode `0755` (not `0775` or
+   setgid), independent of the build runner's umask; the M4 package audit
+   enforces this before creating its SPDX and dependency sidecars.
 3. **Windows:** Windows MSVC x64 builds two executables with pinned vcpkg
    static OpenSSL and GLFW. Run all CLI regression tests and dependency import
    audit. A Win10 and Win11 **physical/independent VM** install-free GUI launch

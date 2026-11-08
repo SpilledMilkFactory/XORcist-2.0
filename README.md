@@ -177,15 +177,15 @@ docs/               Java audit, roadmap, third-party licenses
 ## Security and compatibility policy
 
 * Strict input validation, no output overwrite, bounded legacy inputs, escaped console output.
-* The same key reverses XOR; there is **no** AEAD, salt, integrity check, or secure key lifecycle.
+* Educational repeating-key XOR is reversible but **not secure encryption**. The separate `secure` commands use OpenSSL AES-256-GCM with authenticated container metadata; consult `SECURITY.md` for remaining limitations.
 * The original format's Java-only details are preserved in **decode-only** compatibility tooling.
 * IPv4/IPv6 address-family distinction is explicit. Mixed-family supernet/collapse/range operations are rejected. IPv6 zone IDs are not supported.
 * CSV import/export uses one unquoted `cidr` column; it is intentionally not a general-purpose CSV parser. Newline lists permit whitespace and `#` comments.
 * VLSM is IPv4 only, reserves network and broadcast addresses when estimating usable host capacity, places largest subnets first, and refuses requests that do not fit. It does not configure live routes or interfaces.
 * `net split` is bounded to at most 65,536 networks in the CLI (1,024 in the GUI); overlap warnings are bounded to 1,024 input networks. Files are limited to 1 MiB / 50,000 entries.
 * No promise that a GUI binary built on a modern distro runs on Debian 12. Build and package for your **oldest supported target** when selecting a portable baseline, or release per-distro packages.
-* M1 passed the user's Ubuntu 26.04 / GCC 15.2.0 CLI (4/4) and GUI (5/5) tests, including the hidden-window smoke; M2 local GUI validation remains pending.
-* M0/M1 are accepted for the local Ubuntu 26.04 development scope. Debian/Windows hardware, distribution verification, signed release artifacts and third-party dependency qualification remain deferred release gates. A GitHub commit is not release sign-off.
+* M0–M4 application functionality passed the owner's Ubuntu 26.04 / GCC 15.2.0 regression tests (M4 GUI 10/10), hidden-window smoke, and manual GUI inspection. Linux/Windows release qualification remains pending.
+* M0–M3 are accepted for local development; M4 application/packaging infrastructure passes local smoke tests, but cross-platform package installation, independent Windows hardware verification, and signed release promotion are pending. A GitHub commit is not release sign-off.
 
 See [`SECURITY.md`](SECURITY.md), [`docs/2019_AUDIT.md`](docs/2019_AUDIT.md), [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md), [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -303,6 +303,9 @@ on the **target distribution**. CPack detects OS-level runtime dependencies,
 including the distro-specific OpenSSL library; never reuse a package built on
 Debian 13 as the Debian 12 release. Set `XORCIST_INSTALL_DEV_FILES=OFF` for
 runtime-only packages. `xorcist` manpage and GUI `.desktop` entry are installed.
+CPack normalizes `/usr` directory permissions to `0755` even under permissive
+build umasks; the Debian audit rejects group-writable or special-mode payload
+entries before accepting an artifact.
 
 For Ubuntu 26.04 (with system GLFW development files):
 

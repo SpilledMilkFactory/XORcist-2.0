@@ -2,6 +2,17 @@ cmake_minimum_required(VERSION 3.20)
 project(XORcist VERSION 2.0.0 LANGUAGES CXX)
 include(cmake/dependencies.lock.cmake)
 
+# Normalize permissions of implicitly created directories even when the
+# developer or CI runner has a permissive umask (e.g. 0002).
+set(XORCIST_INSTALL_DIRECTORY_PERMISSIONS
+    OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE)
+set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    ${XORCIST_INSTALL_DIRECTORY_PERMISSIONS})
+set(CPACK_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    ${XORCIST_INSTALL_DIRECTORY_PERMISSIONS})
+
 option(XORCIST_BUILD_CLI "Build terminal application" ON)
 option(XORCIST_BUILD_GUI "Build Dear ImGui desktop application (fetches ImGui source)" OFF)
 option(XORCIST_BUILD_TESTS "Build automated core regression tests" ON)
@@ -178,6 +189,9 @@ if(XORCIST_PACKAGE_DEB)
     set(CPACK_DEBIAN_PACKAGE_SECTION "net")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/SpilledMilkFactory/XORcist-2.0")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    # Explicitly normalize directories in the staged archive. A permissive
+    # build umask or inherited setgid bit must not leak into /usr paths.
+    set(CPACK_PRE_BUILD_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/m4_normalize_deb_permissions.cmake")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
     set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")

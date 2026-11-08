@@ -1,0 +1,10 @@
+Architecture: amd64
+Depends: libc6 (>= 2.43), libgcc-s1 (>= 3.0), libglfw3 (>= 3.3), libopengl0, libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1)
+Description: Offline-first networking and binary-data toolkit
+Homepage: https://github.com/SpilledMilkFactory/XORcist-2.0
+Maintainer: SpilledMilkFactory
+Package: xorcist
+Priority: optional
+Section: net
+Version: 2.0.0-1
+Installed-Size: 1985

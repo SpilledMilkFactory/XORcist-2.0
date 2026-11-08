@@ -31,6 +31,10 @@ def main():
     check('XORCIST_PACKAGE_DEB=ON' in workflow and 'cosign verify-blob' in workflow, 'missing packaging/signature checks')
     check('XORCIST_PACKAGE_DEB' in text('CMakeLists.txt'), 'missing CMake packaging switch')
     check('CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON' in text('CMakeLists.txt'), 'missing runtime dependency resolver')
+    check('CPACK_PRE_BUILD_SCRIPTS' in text('CMakeLists.txt'), 'missing DEB staged-permission normalization')
+    check('m4_normalize_deb_permissions.cmake' in text('CMakeLists.txt'), 'missing staged-permission script')
+    check('file(CHMOD' in text('cmake/m4_normalize_deb_permissions.cmake'), 'missing staged mode enforcement')
+    check('validate_payload_modes(deb)' in text('scripts/m4_audit_deb.py'), 'missing payload-permission audit')
     print('PASS: M4 packaging metadata, target matrix, signing checks, and licenses')
 
 if __name__ == '__main__': main()
