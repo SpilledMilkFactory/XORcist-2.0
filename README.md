@@ -55,6 +55,21 @@ If the GUI build cannot find a system GLFW installation, install the GLFW develo
 
 The **CMake default deliberately leaves GUI off** so a headless server can build the CLI with no graphics dependencies and without network access. Enable GUI explicitly as shown above.
 
+### GUI navigation (tile dashboard)
+
+The desktop application opens to a dashboard of **12 fully named tool tiles**, grouped
+into a responsive three-column grid at the default 1050×720 window size. Select a
+tile to open that tool's workspace: its panel slides upward from the bottom and
+covers the dashboard. Close the workspace using the **X** in its upper-right
+corner or **Escape** to return to the tiles. Input values and previously computed
+results are retained when navigating between tools. Result panes use the
+remaining vertical space and scroll when their output is long; smaller windows
+can scroll the dashboard or workspace independently.
+
+This is a GUI navigation/layout change only. The CLI, networking, binary data,
+cryptographic algorithms, and `.xorc3` file format are unchanged. See
+[`docs/V2_0_1_UI_ACCEPTANCE.md`](docs/V2_0_1_UI_ACCEPTANCE.md) for visual checks.
+
 ### Windows build
 
 Use Visual Studio 2022 / CMake 3.20+ / Git, a supported C++20 MSVC toolchain, OpenSSL 3.x (`OpenSSL::Crypto`, e.g. via vcpkg), and either GLFW via vcpkg or the FetchContent fallback. The following commands assume CMake can find the installed OpenSSL development package:
@@ -150,7 +165,8 @@ attempts, enforces a 100–2000 ms per-attempt timeout and 200–2000 ms inter-a
 and rejects a combined configured probe budget over 10 seconds. Scheduler delays may make
 wall time slightly longer. No privileged network operations, discovery sweeps or packet capture.
 
-The GUI gains three **M2** tabs. DNS, reverse DNS, system inventory and TCP probes run on
+The GUI provides dedicated tiles for DNS & System Information, Subnet Masks & ACL Helpers,
+and TCP Reachability. DNS, reverse DNS, system inventory and TCP probes run on
 an asynchronous worker to keep the GUI responsive; a pending system DNS lookup may still
 delay application shutdown because the platform resolver provides no portable hard deadline.
 
@@ -288,8 +304,8 @@ M3 fuzzers exercise strict encoded-data parsers and unauthenticated container-he
 Intermediate plaintext is stored in a private temp file, which can remain
 after process crashes; see `SECURITY.md` for significant limitations.
 
-GUI adds **Data / Binary Tools** and **Authenticated Files** tabs. OpenSSL
-3 is an additional runtime dependency; on Windows the final portable ZIP
+The GUI offers **Binary Data Tools** and **Authenticated File Encryption** workspaces.
+OpenSSL 3 is an additional runtime dependency; on Windows the final portable ZIP
 will require explicit DLL/provider packaging and license review in M4.
 
 See [`docs/M3_ACCEPTANCE.md`](docs/M3_ACCEPTANCE.md) for local gates and
