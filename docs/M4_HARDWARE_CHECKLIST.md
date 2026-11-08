@@ -1,29 +1,25 @@
-# M4 — Windows 10 / Windows 11 Hardware Acceptance
+# Windows 10/11 release acceptance worksheet
 
-Record a separate set of results for **each** supported Windows version.
+This is a **reusable blank checklist for future Windows releases**, not evidence that the published v2.0.0 release was untested. The maintainer reported successful fresh-VM validation for v2.0.0. For new releases, record separate evidence for **each** Windows version and retain it with the release qualification records.
 
-| Field | Entry |
-|---|---|
-| Hardware / VM model and CPU architecture | Pending |
-| Windows edition and OS build | Pending |
-| Build artifact name and SHA-256 | Pending |
-| Source Git SHA | Pending |
-| Driver / OpenGL version | Pending |
-| Test date and tester | Pending |
-| CLI launch and --help output | Pending |
-| GUI launch, tabs, keyboard focus, DPI/font check | Pending |
-| Network inspection and DNS | Pending |
-| Binary/Base64/hex round trip | Pending |
-| Authenticated encrypt/decrypt byte-for-byte compare | Pending |
-| Wrong passphrase correctly rejected without output | Pending |
-| Windows DLL import list reviewed | Pending |
-| Offline startup, no missing DLL error | Pending |
-| No-overwrite UX + error-message clarity | Pending |
-| Screenshots (with secrets/redacted identifiers) | Pending |
-| Result, deviations and explicit sign-off | Pending |
+| Field | Test observation |
+| --- | --- |
+| Physical hardware or VM, CPU architecture | Not recorded |
+| Windows edition/build | Not recorded |
+| Candidate artifact name and SHA-256 | Not recorded |
+| Source Git SHA / release tag | Not recorded |
+| Graphics driver and OpenGL version | Not recorded |
+| Test date / tester | Not recorded |
+| CLI startup, `--help` and diagnostic commands | Not recorded |
+| GUI launch, tile dashboard, X/Escape, keyboard focus, DPI/font scaling | Not recorded |
+| Interface, route, and DNS inspection | Not recorded |
+| Base64, hex, file compare and XOR round trips | Not recorded |
+| AES-256-GCM encrypt/decrypt byte-for-byte comparison | Not recorded |
+| Wrong-password rejection without completed output | Not recorded |
+| Windows imported-DLL inventory reviewed | Not recorded |
+| Offline startup with no Visual Studio or missing DLLs | Not recorded |
+| No-overwrite UX and useful error messages | Not recorded |
+| Redacted screenshot evidence | Not recorded |
+| Deviations, disposition and owner approval | Not recorded |
 
-Test extraction into a fresh directory and start without a development
-build toolchain. If any DLL is missing, **fail** the candidate rather than
-copying untracked dependencies. Do not confuse hosted GitHub Windows with a
-real Windows 10/11 acceptance environment. Test with a non-sensitive fixture.
-Never publish personal network interface addresses or secrets in screenshots.
+Unpack into a fresh directory and run without a developer toolchain. Do not work around missing DLLs by copying unspecified libraries; investigate and correct packaging instead. Test with non-sensitive data. Never commit passphrases, internal network addresses, or personal paths in public screenshots.

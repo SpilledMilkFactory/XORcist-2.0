@@ -1,10 +1,23 @@
-# CMake / compiler outputs
-build/
-build-*/
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-Testing/
+# Build trees, CMake/Ninja generated files, and packaged staging trees
+/build/
+/build-*/
+/build*
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/Testing/
+/_CPack_Packages/
+/stage-*/
+/dist/
+/XORcist-2.0-Release/
+/vcpkg/
+/build-m0-corpus/
+CMakeUserPresets.json
+compile_commands.json
+CPackConfig.cmake
+CPackSourceConfig.cmake
+
+# Compiler, profiling, crash/fuzz, and other local artifacts
 *.o
 *.obj
 *.a
@@ -14,44 +27,30 @@ Testing/
 *.exe
 *.pdb
 *.dSYM/
-# Generated runtime data
-imgui.ini
-imgui_log.txt
-# IDE / OS
-.idea/
-.vscode/
-.DS_Store
-*.swp
-# Sensitive or local user data (add fixtures only under tests/fixtures/)
-keys.dat
-cipherText.dat
-*.xor
-*.key
-
-# The deliberately synthetic compatibility fixtures are tracked.
-!tests/fixtures/keys.dat
-!tests/fixtures/cipherText.dat
-
-# M0 candidate packaging / local fuzz corpus
-stage-*/
-dist/
-build-m0*/
 *.profraw
 *.profdata
 crash-*
 leak-*
 timeout-*
-build-m0-corpus/
-
-# M4 cloned toolchain and package evidence
-vcpkg/
 *.deb
 *.sigstore.json
 *.spdx.json
+
+# Local UI settings, IDE metadata, and Python caches
+imgui.ini
+imgui_log.txt
+.idea/
+.vscode/
+.DS_Store
+*.swp
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# Release
-XORcist-2.0-Release/*
-_CPack_Packages/*
-dist/*
+# Local user files and secret material; only synthetic fixtures are tracked
+keys.dat
+cipherText.dat
+*.xor
+*.key
+!tests/fixtures/keys.dat
+!tests/fixtures/cipherText.dat
