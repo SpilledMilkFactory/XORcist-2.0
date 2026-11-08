@@ -154,7 +154,7 @@ jobs:
           if ($zip.Count -ne 1) { throw 'Unexpected ZIP count' }
           python scripts/check_candidate.py $zip[0].FullName
           if ($LASTEXITCODE -ne 0) { throw 'ZIP verification failed' }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: xorcist-m4-windows-x64
           path: dist/*
@@ -170,7 +170,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           pattern: xorcist-m4-*
           path: candidates
@@ -190,7 +191,43 @@ jobs:
             count=$((count+1))
           done < <(find candidates -type f \( -name '*.deb' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.spdx.json' \) -print0)
           test "$count" -ge 9
-      - uses: actions/upload-artifact@v4
+      - name: Stage five release bundles with complete metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/assemble_release.py prepare \
+            --candidates candidates --staging release-stage \
+            --source-commit "$GITHUB_SHA"
+          test "$(find release-stage -name RELEASE_MANIFEST.json | wc -l)" -eq 5
+      - name: Sign all five embedded release manifests and verify identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/m4-candidates.yml@${GITHUB_REF}"
+          issuer='https://token.actions.githubusercontent.com'
+          for manifest in release-stage/*/RELEASE_MANIFEST.json; do
+            cosign sign-blob --yes --bundle "${manifest}.sigstore.json" "$manifest"
+            cosign verify-blob --bundle "${manifest}.sigstore.json" \
+              --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$manifest"
+          done
+      - name: Build and independently verify exactly six public release assets
+        shell: bash
+        env:
+          SOURCE_DATE_EPOCH: '0'
+        run: |
+          set -euo pipefail
+          python3 scripts/assemble_release.py finalize \
+            --staging release-stage --output-dir release-assets
+          python3 scripts/assemble_release.py verify \
+            --assets release-assets --cosign --source-commit "$GITHUB_SHA"
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 6
+      - uses: actions/upload-artifact@v5
+        with:
+          name: xorcist-release-ready
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v5
         with:
           name: xorcist-m4-signed-candidates
           path: candidates/**

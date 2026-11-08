@@ -50,3 +50,9 @@ ctest --test-dir build-verify --output-on-failure
 ```
 
 On a headless Linux CI worker, run the GUI smoke test through an available display server (for example `xvfb-run`). The live build and packaging commands are also documented in the [README](README.md) and [release guide](docs/M4_RELEASE_GUIDE.md).
+
+## Unreleased v2.0.1 release-asset preparation
+
+The release candidate workflow now stages five platform archives plus a single `SHA256SUMS` after the original M4 build/test/audit gates. Each archive holds a separately signed `RELEASE_MANIFEST.json` describing all payload hashes; an additional `verify --cosign` step checks the internal signer identity and revision before the CI release-ready artifact can be uploaded. Linux tarballs contain the native DEB and its verified SPDX/runtime metadata; Windows ZIP directly contains the runnable install tree.
+
+The new `xorcist_release_asset_tests` CTest uses **synthetic signatures** to test manifest coverage, archive names, checksums, tamper rejection, Windows extraction and six-file enumeration without any external network. Those dummy signatures **do not establish cryptographic validity**. The online CI signing/verification run is required for that. This packaging layout has not yet been qualified as a v2.0.1 release; the project version is intentionally still 2.0.0 until the release-preparation commit. Existing published v2.0.0 assets are unchanged.

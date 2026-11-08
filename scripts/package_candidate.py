@@ -23,6 +23,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / 'cmake' / 'dependencies.lock.cmake'
+from release_version import project_version
 
 
 def sha256(path: Path) -> str:
@@ -65,7 +66,7 @@ def sbom(stage: Path, platform: str, epoch: int) -> dict:
                               'relationshipType': 'CONTAINS'})
     pkg_verification = hashlib.sha1(''.join(sorted(hashlib.sha1(p.read_bytes()).hexdigest() for p in files)).encode()).hexdigest()
     installed_pkg = {
-        'SPDXID': 'SPDXRef-XORcist', 'name': 'XORcist', 'versionInfo': '2.0.0-m4-candidate',
+        'SPDXID': 'SPDXRef-XORcist', 'name': 'XORcist', 'versionInfo': project_version() + '-m4-candidate',
         'downloadLocation': 'NOASSERTION', 'filesAnalyzed': True,
         'packageVerificationCode': {
             'packageVerificationCodeValue': pkg_verification,
@@ -116,7 +117,7 @@ def package(source_stage: Path, output_dir: Path, platform: str, commit: str, ep
     if not source_stage.is_dir():
         raise ValueError(f'missing stage directory: {source_stage}')
     output_dir.mkdir(parents=True, exist_ok=True)
-    basename = f'XORcist-2.0.0-m4-candidate-{platform}'
+    basename = f'XORcist-{project_version()}-m4-candidate-{platform}'
     archive = output_dir / f'{basename}.{fmt}'
     with tempfile.TemporaryDirectory(prefix='xorcist-m4-') as tmp:
         stage = Path(tmp) / basename

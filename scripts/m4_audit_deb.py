@@ -17,6 +17,7 @@ import stat
 import tarfile
 import tempfile
 from package_candidate import sbom
+from release_version import project_version
 
 
 def cmd(*argv: str) -> str:
@@ -68,6 +69,8 @@ def audit(deb: pathlib.Path, platform: str, dest: pathlib.Path, require_gui: boo
     fields = dict(re.findall(r'^([A-Za-z-]+):\s*(.*)$', control, flags=re.MULTILINE))
     if fields.get('Package') != 'xorcist' or fields.get('Architecture') != 'amd64':
         raise ValueError('unexpected package identity or architecture')
+    if fields.get('Version') != project_version():
+        raise ValueError(f'DEB version {fields.get("Version")!r} must equal CMake version {project_version()!r} without revision')
     if 'libc6' not in fields.get('Depends', '') or not re.search(r'libssl3|libcrypto', fields.get('Depends', '')):
         raise ValueError('missing libc or OpenSSL package dependencies')
     # Enforce the glibc symbol floor of each declared target, not only the

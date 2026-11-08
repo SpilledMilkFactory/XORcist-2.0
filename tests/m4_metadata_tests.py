@@ -28,6 +28,16 @@ def main():
     for target in ['debian:12', 'debian:13', 'ubuntu:24.04', 'ubuntu:26.04', 'windows-2022']:
         check(target in workflow, f'missing matrix target: {target}')
     check('workflow_dispatch:' in workflow, 'candidate process must be manual opt-in')
+    check('assemble_release.py prepare' in workflow and 'assemble_release.py finalize' in workflow,
+          'release bundle preparation/finalization missing')
+    check('assemble_release.py verify' in workflow and '--cosign' in workflow,
+          'release manifest independent signature verification missing')
+    check('name: xorcist-release-ready' in workflow, 'missing six-asset release upload')
+    check('CPACK_DEBIAN_PACKAGE_RELEASE "1"' not in text('CMakeLists.txt'),
+          'Debian package must not force a -1 version suffix')
+    candidate = text('scripts/package_candidate.py')
+    check('project_version()' in candidate, 'candidate builder must derive project version from CMake')
+    check('docs/images/latest-release.svg' in text('README.md') and (ROOT/'docs/images/latest-release.svg').is_file(), 'missing local GitHub release badge')
     check('XORCIST_PACKAGE_DEB=ON' in workflow and 'cosign verify-blob' in workflow, 'missing packaging/signature checks')
     check('XORCIST_PACKAGE_DEB' in text('CMakeLists.txt'), 'missing CMake packaging switch')
     check('CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON' in text('CMakeLists.txt'), 'missing runtime dependency resolver')

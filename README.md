@@ -3,7 +3,7 @@
 **A cross-platform C++20 toolkit for IP network planning, network diagnostics, binary analysis, and authenticated file encryption.**
 
 [![CI](https://github.com/SpilledMilkFactory/XORcist-2.0/actions/workflows/ci.yml/badge.svg)](https://github.com/SpilledMilkFactory/XORcist-2.0/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/SpilledMilkFactory/XORcist-2.0)](https://github.com/SpilledMilkFactory/XORcist-2.0/releases/latest)
+[![Latest release](docs/images/latest-release.svg)](https://github.com/SpilledMilkFactory/XORcist-2.0/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg)](CMakeLists.txt)
 
@@ -21,11 +21,11 @@ XORcist provides an offline-first set of tools for network administrators, engin
 
 | Platform | Distribution | How to start |
 | --- | --- | --- |
-| Debian 12 / Debian 13 | Dedicated `amd64` `.deb` for each distribution | Install the matching `.deb`, then run `xorcist` or `xorcist-gui` |
-| Ubuntu 24.04 / Ubuntu 26.04 | Dedicated `amd64` `.deb` for each release | Install the matching `.deb`, then run `xorcist` or `xorcist-gui` |
+| Debian 12 / Debian 13 | Native `amd64` `.deb`, one for each distribution | Install the matching `.deb`; run `xorcist` or `xorcist-gui` |
+| Ubuntu 24.04 / Ubuntu 26.04 | Native `amd64` `.deb`, one for each distribution | Install the matching `.deb`; run `xorcist` or `xorcist-gui` |
 | Windows 10 / 11 | Portable x64 `.zip` | Extract; run `bin/xorcist.exe` or `bin/xorcist-gui.exe` |
 
-Linux example (replace the filename with the package you downloaded for your distribution):
+**Published v2.0.0:** The release provides individual platform packages and verification sidecars. Download the `.deb` for your exact Linux distribution, or the portable Windows ZIP. For example:
 
 ```bash
 sudo apt install ./xorcist_2.0.0-1_ubuntu2604_amd64.deb
@@ -33,7 +33,28 @@ xorcist --help
 xorcist-gui
 ```
 
-Do **not** interchange distribution packages: Debian and Ubuntu releases may require different versions of glibc, OpenSSL, and other system libraries. Release assets include checksums and supply-chain verification information; consult the [release guide](docs/M4_RELEASE_GUIDE.md).
+**Starting with the upcoming v2.0.1 release**, distribution downloads will be organized into **five platform archives and one `SHA256SUMS`** (plus GitHub's automatic source-code archives):
+
+| Archive filename pattern | Contains |
+| --- | --- |
+| `XORcist-<version>-debian12-amd64.tar.gz` | Debian 12 `.deb`, SPDX, runtime inventory, checksums, Sigstore bundles |
+| `XORcist-<version>-debian13-amd64.tar.gz` | Debian 13 `.deb` and associated verification files |
+| `XORcist-<version>-ubuntu2404-amd64.tar.gz` | Ubuntu 24.04 `.deb` and associated verification files |
+| `XORcist-<version>-ubuntu2604-amd64.tar.gz` | Ubuntu 26.04 `.deb` and associated verification files |
+| `XORcist-<version>-windows-x64.zip` | Portable CLI and GUI executable tree, license notices, signed manifest |
+
+On Linux, verify `SHA256SUMS`, then extract the archive for your distribution and install the enclosed `.deb`:
+
+```bash
+sha256sum -c SHA256SUMS
+tar -xzf XORcist-<version>-ubuntu2604-amd64.tar.gz
+cd XORcist-<version>-ubuntu2604-amd64
+sudo apt install ./xorcist_<version>_amd64.deb
+```
+
+Windows users extract the ZIP once; both executables are under `bin/`. Each archive contains a **signed `RELEASE_MANIFEST.json`** and its `.sigstore.json` verification bundle. The manifest binds all included files to their hashes and source commit; the separately provided `SHA256SUMS` verifies archive bytes. See the [release guide](docs/M4_RELEASE_GUIDE.md) for signature verification instructions. These new archive names take effect only when a new release is built and signed; existing v2.0.0 assets remain unchanged.
+
+Do **not** interchange Linux distribution packages: their glibc, OpenSSL, and other runtime requirements may differ.
 
 ## What it does
 
