@@ -50,3 +50,8 @@ vcpkg/
 *.spdx.json
 __pycache__/
 *.pyc
+
+# Release
+XORcist-2.0-Release/*
+_CPack_Packages/*
+dist/*
