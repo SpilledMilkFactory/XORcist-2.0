@@ -123,3 +123,43 @@ vector and scrypt-backed file round trips with tag/header/payload tampering.
 Local verification details and owner acceptance commands are described in
 `docs/M3_ACCEPTANCE.md`; do not mark the GUI or user Ubuntu environment as
 verified from assistant-side builds alone.
+
+
+## M4 distribution infrastructure (local preparation)
+
+M3 accepted by owner on Ubuntu 26.04: 8/8 CLI, 9/9 GUI tests;
+AES-256-GCM/scrypt encrypt/decrypt byte-for-byte match and wrong-password
+rejection. The subsequent M4 Linux CLI-only Release build on Debian 13 with
+GCC completed, 8/8 pre-M4 CTests passed, and CPack emitted a `xorcist_2.0.0-1_amd64.deb`.
+`dpkg-deb --field` reported version 2.0.0-1, architecture amd64, and runtime
+`Depends: libc6, libgcc-s1, libssl3t64, libstdc++6` with version constraints.
+The package payload and executable imports passed the new local auditing
+script. This **does not** establish M4 release qualification: Debian 12,
+Ubuntu 24.04/26.04, full GUI/DEB matrix, Windows MSVC build, actual Windows
+10/11 launch, Cosign transparency verification, and third-party audit remain
+pending GitHub Actions and hardware verification.
+The M4 DEB audit additionally enforces the target GLIBC symbol-version ceilings
+(2.36 / 2.41 / 2.39 / 2.43 for Debian 12 / Debian 13 / Ubuntu 24.04 /
+Ubuntu 26.04, respectively) when given the matching target identifier.
+
+
+## M4 owner development verification and candidate package audit — November 7, 2026
+
+Owner-reported Ubuntu 26.04, GCC 15.2.0: GUI and CLI built successfully,
+**10/10 CTest passed**, GUI `--smoke-test` passed, and the main GUI launched.
+An uploaded local native Ubuntu 26.04 `xorcist_2.0.0-1_amd64.deb` contains
+both applications, the manpage, desktop launcher, and license notices, and
+has package dependencies on `libc6 (>= 2.43)`, `libssl3t64`, GLFW, OpenGL,
+libstdc++, and libgcc. **Package install/upgrade/removal were not evidenced.**
+
+Package review found unintended directory mode `0775` on `/usr` and other
+staged directories. The subsequent hardening patch normalizes these to `0755`
+and rejects unexpected writable/special payload modes. A rebuilt local CLI-only
+Debian 13 package passed the stricter archive audit. The corrected Ubuntu 26.04
+GUI-containing package must be rebuilt and audited on the owner's host.
+
+**M4 implementation/local development: PASS (owner-reported). M4 public-release
+qualification: PENDING.** Debian 12/13 and Ubuntu 24.04 clean builds and
+installation evidence, Windows MSVC + Windows 10/11 hardware validation,
+Sigstore candidate verification, and documented GUI accessibility review
+remain explicit release gates under `docs/M4_ACCEPTANCE.md`.

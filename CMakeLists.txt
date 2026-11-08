@@ -2,10 +2,23 @@ cmake_minimum_required(VERSION 3.20)
 project(XORcist VERSION 2.0.0 LANGUAGES CXX)
 include(cmake/dependencies.lock.cmake)
 
+# Normalize permissions of implicitly created directories even when the
+# developer or CI runner has a permissive umask (e.g. 0002).
+set(XORCIST_INSTALL_DIRECTORY_PERMISSIONS
+    OWNER_READ OWNER_WRITE OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE)
+set(CMAKE_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    ${XORCIST_INSTALL_DIRECTORY_PERMISSIONS})
+set(CPACK_INSTALL_DEFAULT_DIRECTORY_PERMISSIONS
+    ${XORCIST_INSTALL_DIRECTORY_PERMISSIONS})
+
 option(XORCIST_BUILD_CLI "Build terminal application" ON)
 option(XORCIST_BUILD_GUI "Build Dear ImGui desktop application (fetches ImGui source)" OFF)
 option(XORCIST_BUILD_TESTS "Build automated core regression tests" ON)
 option(XORCIST_BUILD_FUZZER "Build Clang libFuzzer harness (requires instrumented build)" OFF)
+option(XORCIST_INSTALL_DEV_FILES "Install developer headers and static core library" ON)
+option(XORCIST_PACKAGE_DEB "Enable native DEB packaging with detected runtime dependencies" OFF)
 if(XORCIST_BUILD_TESTS)
     include(CTest)
 endif()
@@ -42,6 +55,7 @@ if(XORCIST_BUILD_CLI)
     add_executable(xorcist src/cli/main.cpp src/cli/planning_cli.cpp src/cli/diagnostics_cli.cpp src/cli/data_cli.cpp)
     target_link_libraries(xorcist PRIVATE xorcist_core)
     install(TARGETS xorcist RUNTIME DESTINATION bin)
+    install(FILES docs/man/xorcist.1 DESTINATION share/man/man1)
 endif()
 
 if(XORCIST_BUILD_GUI)
@@ -94,6 +108,9 @@ if(XORCIST_BUILD_GUI)
     add_executable(xorcist-gui src/gui/main.cpp)
     target_link_libraries(xorcist-gui PRIVATE xorcist_core xorcist_imgui)
     install(TARGETS xorcist-gui RUNTIME DESTINATION bin)
+    if(UNIX AND NOT APPLE)
+        install(FILES packaging/linux/xorcist.desktop DESTINATION share/applications)
+    endif()
     if(XORCIST_BUILD_TESTS)
         add_test(NAME xorcist_gui_smoke COMMAND xorcist-gui --smoke-test)
         set_tests_properties(xorcist_gui_smoke PROPERTIES TIMEOUT 30)
@@ -101,6 +118,10 @@ if(XORCIST_BUILD_GUI)
 endif()
 
 if(XORCIST_BUILD_TESTS)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME xorcist_m4_metadata_tests COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/m4_metadata_tests.py")
+    endif()
     add_executable(xorcist_tests tests/core_tests.cpp)
     target_link_libraries(xorcist_tests PRIVATE xorcist_core)
     target_compile_definitions(xorcist_tests PRIVATE
@@ -143,10 +164,39 @@ if(XORCIST_BUILD_TESTS)
     endif()
 endif()
 
-install(TARGETS xorcist_core ARCHIVE DESTINATION lib)
-install(DIRECTORY include/ DESTINATION include)
+if(XORCIST_INSTALL_DEV_FILES)
+    install(TARGETS xorcist_core ARCHIVE DESTINATION lib)
+    install(DIRECTORY include/ DESTINATION include)
+endif()
 install(FILES README.md LICENSE THIRD_PARTY_NOTICES.md SECURITY.md docs/M3_FILE_FORMAT.md DESTINATION share/doc/xorcist)
 install(DIRECTORY docs/licenses/ DESTINATION share/doc/xorcist/third-party-licenses)
+
+if(XORCIST_PACKAGE_DEB)
+    if(NOT UNIX OR APPLE)
+        message(FATAL_ERROR "XORCIST_PACKAGE_DEB requires a Debian-family Linux build host")
+    endif()
+    if(NOT XORCIST_BUILD_CLI)
+        message(FATAL_ERROR "DEB packaging requires the CLI executable")
+    endif()
+    # Keep packaging installation paths and Debian dependency detection local
+    # to the distro build. Do not hard-code libssl3 vs libssl3t64.
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_PACKAGE_NAME "xorcist")
+    set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_CONTACT "SpilledMilkFactory (GitHub issues)")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Offline-first networking and binary-data toolkit")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "SpilledMilkFactory")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/SpilledMilkFactory/XORcist-2.0")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    # Explicitly normalize directories in the staged archive. A permissive
+    # build umask or inherited setgid bit must not leak into /usr paths.
+    set(CPACK_PRE_BUILD_SCRIPTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/m4_normalize_deb_permissions.cmake")
+    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+    set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+    include(CPack)
+endif()
 
 if(XORCIST_BUILD_FUZZER)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")

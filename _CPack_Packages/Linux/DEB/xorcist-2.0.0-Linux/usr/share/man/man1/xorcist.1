@@ -1,0 +1,54 @@
+.TH XORCIST 1 "November 2026" "XORcist 2.0" "User Commands"
+.SH NAME
+xorcist \- networking, diagnostics, and binary-data command-line utilities
+.SH SYNOPSIS
+.B xorcist
+.I net|diag|data|xor|secure|legacy-decrypt
+.RI [ arguments ]
+.SH DESCRIPTION
+XORcist performs offline IP planning and file operations, system DNS and
+read-only route/interface inspection, and explicitly bounded TCP probes.
+It includes authenticated file encryption using AES-256-GCM and scrypt.
+The separate repeating-key XOR teaching tool is \fBnot secure encryption\fR.
+.SH COMMANDS
+.TP
+.B net
+CIDR parsing, IPv4/IPv6 supernetting, range covering, overlap, VLSM and splitting.
+.TP
+.B diag
+DNS and reverse lookups, interface/route inventory, mask and ACL helpers,
+explicitly scoped TCP connection probes.
+.TP
+.B data
+Base64 and hexadecimal encoding/decoding, binary inspection and comparison.
+.TP
+.B xor
+Byte-wise repeating-key XOR demonstration only. Not for protecting secrets.
+.TP
+.B secure
+Authenticated file encryption/decryption. Use a strong passphrase and keep
+originals and backups until decryption is verified. Does not overwrite output.
+.TP
+.B legacy-decrypt
+Read-only compatibility with 2019 Java XORcist data files.
+.SH EXAMPLES
+.nf
+xorcist net summarize 192.168.1.1/24 192.168.2.1/24
+xorcist diag dns localhost --family v4
+xorcist diag interfaces
+xorcist xor text --text 'Hello!' --key-hex 010203
+xorcist secure encrypt --in file.bin --out file.xorc3
+xorcist secure decrypt --in file.xorc3 --out recovered.bin
+.fi
+.SH SECURITY
+Encryption relies on OpenSSL. Successful authentication checks file integrity,
+not the identity or safety of the plaintext. Temporary plaintext may persist
+after an abnormal termination. Never paste passwords into command arguments.
+See SECURITY.md and M3_FILE_FORMAT.md for details.
+.SH FILES
+/usr/share/doc/xorcist/README.md, SECURITY.md and THIRD_PARTY_NOTICES.md.
+.SH BUGS
+Report issues via https://github.com/SpilledMilkFactory/XORcist-2.0/issues.
+.SH SEE ALSO
+.BR openssl (1),
+.BR ip (8)

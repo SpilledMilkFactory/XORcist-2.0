@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify M0 candidate checksum, embedded SPDX file hashes, and metadata.
+"""Verify M4 candidate checksum, embedded SPDX file hashes, and metadata.
 
 Does not establish trust in the signer: independently verify Sigstore bundles.
 """
@@ -40,7 +40,7 @@ def check(archive: Path) -> None:
     dep_path = root + '/share/doc/xorcist/DEPENDENCIES.lock.json'
     sbom = json.loads(contents[sbom_path])
     manifest = json.loads(contents[dep_path])
-    if sbom['spdxVersion'] != 'SPDX-2.3' or manifest['schema'] != 'xorcist.m0.candidate.v1':
+    if sbom['spdxVersion'] != 'SPDX-2.3' or manifest['schema'] != 'xorcist.m4.candidate.v1':
         raise ValueError('unrecognized SBOM/manifest schema')
     ids = set()
     for entry in sbom['files']:

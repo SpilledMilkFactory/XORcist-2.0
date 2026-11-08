@@ -1,0 +1,162 @@
+# Candidate-only distribution qualification. Does NOT create a GitHub Release.
+# Run manually from main after M3 acceptance; GitHub-hosted Windows is not a
+# substitute for real Windows 10/11 acceptance.
+name: M4 platform packages and signed candidates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-packages:
+    name: Linux DEB & candidate (${{ matrix.label }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: debian12, image: 'debian:12' }
+          - { label: debian13, image: 'debian:13' }
+          - { label: ubuntu2404, image: 'ubuntu:24.04' }
+          - { label: ubuntu2604, image: 'ubuntu:26.04' }
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install native build and runtime-validation tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git g++ cmake ninja-build python3 dpkg-dev binutils \
+            libssl-dev libgl1-mesa-dev libgl1-mesa-dri libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev libxkbcommon-dev xvfb xauth
+      - uses: actions/checkout@v4
+      - name: Configure with pinned Dear ImGui / GLFW source revisions
+        run: |
+          cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DXORCIST_BUILD_CLI=ON -DXORCIST_BUILD_GUI=ON \
+            -DXORCIST_BUILD_TESTS=ON -DXORCIST_PACKAGE_DEB=ON \
+            -DXORCIST_INSTALL_DEV_FILES=OFF \
+            -DXORCIST_USE_SYSTEM_GLFW=OFF -DXORCIST_FETCH_GLFW=ON
+      - name: Build and test including headless GUI
+        run: |
+          cmake --build build-release --parallel 2
+          xvfb-run -a -s '-screen 0 1280x800x24' ctest --test-dir build-release --output-on-failure
+          ./build-release/xorcist --help
+      - name: Build native DEB and deterministic installed-tree candidate
+        env:
+          SOURCE_DATE_EPOCH: '0'
+        run: |
+          mkdir -p dist
+          cd build-release && cpack -G DEB && cd ..
+          cp build-release/*.deb dist/
+          python3 scripts/m4_audit_deb.py --deb dist/*.deb --platform '${{ matrix.label }}-amd64' --outdir dist --require-gui
+          (cd dist && sha256sum -c *.deb.sha256)
+          cmake --install build-release --prefix stage-m4
+          python3 scripts/package_candidate.py --stage stage-m4 --output-dir dist \
+            --platform '${{ matrix.label }}-amd64' --git-sha "$GITHUB_SHA" --format tar.gz
+          python3 scripts/check_candidate.py dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xorcist-m4-${{ matrix.label }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-portable:
+    name: Windows x64 MSVC static deps / ZIP
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin vcpkg registry and install static OpenSSL
+        shell: pwsh
+        run: |
+          git clone --quiet --branch 2026.10.16 --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg bootstrap failed' }
+          .\vcpkg\vcpkg.exe install openssl:x64-windows-static
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg OpenSSL install failed' }
+          git -C vcpkg rev-parse HEAD | Out-File -FilePath vcpkg-revision.txt
+      - name: Configure MSVC /MT, static OpenSSL and pinned GUI sources
+        shell: pwsh
+        run: |
+          cmake -S . -B build-release -A x64 `
+            "-DCMAKE_TOOLCHAIN_FILE=$PWD/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DOPENSSL_USE_STATIC_LIBS=ON `
+            -DXORCIST_BUILD_GUI=ON -DXORCIST_BUILD_CLI=ON `
+            -DXORCIST_BUILD_TESTS=ON -DXORCIST_INSTALL_DEV_FILES=OFF `
+            -DXORCIST_USE_SYSTEM_GLFW=OFF -DXORCIST_FETCH_GLFW=ON
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configure failed' }
+      - name: Compile and run core / CLI tests (runner GUI launch not treated as hardware sign-off)
+        shell: pwsh
+        run: |
+          cmake --build build-release --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'MSVC build failed' }
+          ctest --test-dir build-release -C Release --output-on-failure -E xorcist_gui_smoke
+          if ($LASTEXITCODE -ne 0) { throw 'Core / CLI tests failed' }
+          .\build-release\Release\xorcist.exe --help
+          if ($LASTEXITCODE -ne 0) { throw 'CLI smoke failed' }
+      - name: Stage, audit imported DLLs, and create portable ZIP
+        shell: pwsh
+        env:
+          SOURCE_DATE_EPOCH: '0'
+        run: |
+          cmake --install build-release --config Release --prefix stage-m4
+          if ($LASTEXITCODE -ne 0) { throw 'CMake install failed' }
+          & ./scripts/m4_windows_audit.ps1 -Stage stage-m4 -VcpkgRoot vcpkg
+          if ($LASTEXITCODE -ne 0) { throw 'DLL audit failed' }
+          Copy-Item vcpkg-revision.txt stage-m4/share/doc/xorcist/VCPKG_COMMIT.txt
+          .\vcpkg\vcpkg.exe list --triplet x64-windows-static | Out-File -FilePath stage-m4/share/doc/xorcist/VCPKG_INSTALLED_PACKAGES.txt -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg inventory failed' }
+          python scripts/package_candidate.py --stage stage-m4 --output-dir dist `
+            --platform windows-x64 --git-sha "$env:GITHUB_SHA" --format zip
+          if ($LASTEXITCODE -ne 0) { throw 'ZIP packaging failed' }
+          $zip = @(Get-ChildItem dist -Filter *.zip)
+          if ($zip.Count -ne 1) { throw 'Unexpected ZIP count' }
+          python scripts/check_candidate.py $zip[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw 'ZIP verification failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xorcist-m4-windows-x64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  sign-candidates:
+    name: Verify provenance / keyless sign candidate artifacts
+    needs: [linux-packages, windows-portable]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: xorcist-m4-*
+          path: candidates
+          merge-multiple: false
+      - uses: sigstore/cosign-installer@v4.1.2
+      - name: Sign + independently verify each distribution artifact and SPDX sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/m4-candidates.yml@${GITHUB_REF}"
+          issuer='https://token.actions.githubusercontent.com'
+          count=0
+          while IFS= read -r -d '' file; do
+            cosign sign-blob --yes --bundle "${file}.sigstore.json" "$file"
+            cosign verify-blob --bundle "${file}.sigstore.json" \
+              --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$file"
+            count=$((count+1))
+          done < <(find candidates -type f \( -name '*.deb' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.spdx.json' \) -print0)
+          test "$count" -ge 9
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xorcist-m4-signed-candidates
+          path: candidates/**
+          if-no-files-found: error
+          retention-days: 30

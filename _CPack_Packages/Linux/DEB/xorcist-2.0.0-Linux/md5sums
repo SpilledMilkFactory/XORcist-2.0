@@ -1,0 +1,12 @@
+612d3d8e8ba8cb5c308a80fa1f67d106  usr/bin/xorcist
+8779869d888d71fce016ec92d8cd7022  usr/bin/xorcist-gui
+d233072257877d5bee34fc6993bbc571  usr/share/applications/xorcist.desktop
+8983271b99069d0debaf764c87fd22d8  usr/share/doc/xorcist/LICENSE
+9a98dbb528f8fec1c5f085e02e89b86c  usr/share/doc/xorcist/M3_FILE_FORMAT.md
+867cd2401fa6ffe01633f4716bf3e34f  usr/share/doc/xorcist/README.md
+60e5ba44066150d88927479e914b8b17  usr/share/doc/xorcist/SECURITY.md
+1b551337daf7393538a5d15f8d4ab856  usr/share/doc/xorcist/THIRD_PARTY_NOTICES.md
+ebc72b06aa04da10b18c6766b436f279  usr/share/doc/xorcist/third-party-licenses/DEAR_IMGUI_LICENSE.txt
+bb2299ee9a36a23981992c955d033010  usr/share/doc/xorcist/third-party-licenses/GLFW_LICENSE.txt
+3b83ef96387f14655fc854ddc3c6bd57  usr/share/doc/xorcist/third-party-licenses/OPENSSL_APACHE-2.0.txt
+464b1e0e32aca923f37b360d830c8781  usr/share/man/man1/xorcist.1

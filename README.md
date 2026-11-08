@@ -177,15 +177,15 @@ docs/               Java audit, roadmap, third-party licenses
 ## Security and compatibility policy
 
 * Strict input validation, no output overwrite, bounded legacy inputs, escaped console output.
-* The same key reverses XOR; there is **no** AEAD, salt, integrity check, or secure key lifecycle.
+* Educational repeating-key XOR is reversible but **not secure encryption**. The separate `secure` commands use OpenSSL AES-256-GCM with authenticated container metadata; consult `SECURITY.md` for remaining limitations.
 * The original format's Java-only details are preserved in **decode-only** compatibility tooling.
 * IPv4/IPv6 address-family distinction is explicit. Mixed-family supernet/collapse/range operations are rejected. IPv6 zone IDs are not supported.
 * CSV import/export uses one unquoted `cidr` column; it is intentionally not a general-purpose CSV parser. Newline lists permit whitespace and `#` comments.
 * VLSM is IPv4 only, reserves network and broadcast addresses when estimating usable host capacity, places largest subnets first, and refuses requests that do not fit. It does not configure live routes or interfaces.
 * `net split` is bounded to at most 65,536 networks in the CLI (1,024 in the GUI); overlap warnings are bounded to 1,024 input networks. Files are limited to 1 MiB / 50,000 entries.
 * No promise that a GUI binary built on a modern distro runs on Debian 12. Build and package for your **oldest supported target** when selecting a portable baseline, or release per-distro packages.
-* M1 passed the user's Ubuntu 26.04 / GCC 15.2.0 CLI (4/4) and GUI (5/5) tests, including the hidden-window smoke; M2 local GUI validation remains pending.
-* M0/M1 are accepted for the local Ubuntu 26.04 development scope. Debian/Windows hardware, distribution verification, signed release artifacts and third-party dependency qualification remain deferred release gates. A GitHub commit is not release sign-off.
+* M0–M4 application functionality passed the owner's Ubuntu 26.04 / GCC 15.2.0 regression tests (M4 GUI 10/10), hidden-window smoke, and manual GUI inspection. Linux/Windows release qualification remains pending.
+* M0–M3 are accepted for local development; M4 application/packaging infrastructure passes local smoke tests, but cross-platform package installation, independent Windows hardware verification, and signed release promotion are pending. A GitHub commit is not release sign-off.
 
 See [`SECURITY.md`](SECURITY.md), [`docs/2019_AUDIT.md`](docs/2019_AUDIT.md), [`docs/M1_ACCEPTANCE.md`](docs/M1_ACCEPTANCE.md), [`docs/M2_ACCEPTANCE.md`](docs/M2_ACCEPTANCE.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
@@ -294,3 +294,41 @@ will require explicit DLL/provider packaging and license review in M4.
 
 See [`docs/M3_ACCEPTANCE.md`](docs/M3_ACCEPTANCE.md) for local gates and
 [`docs/M3_FILE_FORMAT.md`](docs/M3_FILE_FORMAT.md) for the experimental envelope layout.
+
+
+## M4 — Candidate packaging and distribution (not yet release-qualified)
+
+`XORCIST_PACKAGE_DEB=ON` enables native Debian-family CPack packaging. Build
+on the **target distribution**. CPack detects OS-level runtime dependencies,
+including the distro-specific OpenSSL library; never reuse a package built on
+Debian 13 as the Debian 12 release. Set `XORCIST_INSTALL_DEV_FILES=OFF` for
+runtime-only packages. `xorcist` manpage and GUI `.desktop` entry are installed.
+CPack normalizes `/usr` directory permissions to `0755` even under permissive
+build umasks; the Debian audit rejects group-writable or special-mode payload
+entries before accepting an artifact.
+
+For Ubuntu 26.04 (with system GLFW development files):
+
+```bash
+cmake -S . -B build-m4 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DXORCIST_BUILD_GUI=ON -DXORCIST_BUILD_TESTS=ON \
+  -DXORCIST_PACKAGE_DEB=ON -DXORCIST_INSTALL_DEV_FILES=OFF \
+  -DXORCIST_FETCH_GLFW=OFF
+cmake --build build-m4 --parallel
+ctest --test-dir build-m4 --output-on-failure
+(cd build-m4 && cpack -G DEB)
+```
+
+Windows x64 candidates are built with MSVC `/MT`, static OpenSSL (vcpkg
+`x64-windows-static`, pinned registry tag 2026.10.16), and pinned Dear ImGui
+and GLFW. Its portable ZIP includes a DLL-import audit and full copyright
+notices. No third-party DLLs should need redistributing; system DLL imports
+and graphics drivers still require real Windows 10/11 launch checks. The
+manual workflow `.github/workflows/m4-candidates.yml` builds candidate assets
+and signs them keylessly **only if all platform jobs pass**. It never
+publishes a GitHub Release automatically.
+
+Follow [`docs/M4_ACCEPTANCE.md`](docs/M4_ACCEPTANCE.md),
+[`docs/M4_HARDWARE_CHECKLIST.md`](docs/M4_HARDWARE_CHECKLIST.md),
+[`docs/M4_UI_REVIEW.md`](docs/M4_UI_REVIEW.md), and
+[`docs/M4_RELEASE_GUIDE.md`](docs/M4_RELEASE_GUIDE.md).
