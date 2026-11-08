@@ -13,7 +13,7 @@ XORcist provides an offline-first set of tools for network administrators, engin
 
 ![XORcist tile-based tool dashboard](docs/images/dashboard.png)
 
-*The tile-based dashboard shown above is on `main` and is planned for v2.0.1; the latest published stable release is v2.0.0.*
+*The 12-tile dashboard is introduced in **v2.0.1**. The release link above always points to the latest **published** version; a version bump on `main` does not publish new binaries.*
 
 ## Get XORcist
 
@@ -25,15 +25,7 @@ XORcist provides an offline-first set of tools for network administrators, engin
 | Ubuntu 24.04 / Ubuntu 26.04 | Native `amd64` `.deb`, one for each distribution | Install the matching `.deb`; run `xorcist` or `xorcist-gui` |
 | Windows 10 / 11 | Portable x64 `.zip` | Extract; run `bin/xorcist.exe` or `bin/xorcist-gui.exe` |
 
-**Published v2.0.0:** The release provides individual platform packages and verification sidecars. Download the `.deb` for your exact Linux distribution, or the portable Windows ZIP. For example:
-
-```bash
-sudo apt install ./xorcist_2.0.0-1_ubuntu2604_amd64.deb
-xorcist --help
-xorcist-gui
-```
-
-**Starting with the upcoming v2.0.1 release**, distribution downloads will be organized into **five platform archives and one `SHA256SUMS`** (plus GitHub's automatic source-code archives):
+**From v2.0.1 onward:** Download the archive matching your platform. The release contains **five platform archives and one `SHA256SUMS`** (plus GitHub's automatic source-code archives):
 
 | Archive filename pattern | Contains |
 | --- | --- |
@@ -52,7 +44,18 @@ cd XORcist-<version>-ubuntu2604-amd64
 sudo apt install ./xorcist_<version>_amd64.deb
 ```
 
-Windows users extract the ZIP once; both executables are under `bin/`. Each archive contains a **signed `RELEASE_MANIFEST.json`** and its `.sigstore.json` verification bundle. The manifest binds all included files to their hashes and source commit; the separately provided `SHA256SUMS` verifies archive bytes. See the [release guide](docs/M4_RELEASE_GUIDE.md) for signature verification instructions. These new archive names take effect only when a new release is built and signed; existing v2.0.0 assets remain unchanged.
+Windows users extract the ZIP once; both executables are under `bin/`. Each archive contains a **signed `RELEASE_MANIFEST.json`** and its `.sigstore.json` verification bundle. The manifest binds all included files to their hashes and source commit; the separately provided `SHA256SUMS` verifies archive bytes. See the [release guide](docs/M4_RELEASE_GUIDE.md) for signature verification instructions. The new archive layout applies only to newly built releases; the published v2.0.0 assets remain unchanged.
+
+<details>
+<summary>Installing from the original v2.0.0 release</summary>
+
+The initial release provides separate `.deb` downloads and verification sidecars rather than consolidated platform archives. Select the correct distribution-specific `.deb` and install it directly, for example:
+
+```bash
+sudo apt install ./xorcist_2.0.0-1_ubuntu2604_amd64.deb
+```
+
+</details>
 
 Do **not** interchange Linux distribution packages: their glibc, OpenSSL, and other runtime requirements may differ.
 
@@ -150,7 +153,7 @@ docs/             Technical specifications, release guides, and licenses
 .github/workflows/  CI and signed platform-candidate builds
 ```
 
-The initial **v2.0.0** release passed the GitHub Actions candidate matrix for Debian 12/13, Ubuntu 24.04/26.04, and Windows x64, including artifact signing and verification. The maintainer reports installation and functional testing on fresh VMs for all supported targets. This is *release engineering evidence*, **not** independent security certification. See [VERIFICATION.md](VERIFICATION.md) for the scope and limits of testing, and [docs/ROADMAP.md](docs/ROADMAP.md) for ongoing development.
+The initial **v2.0.0** release passed the GitHub Actions candidate matrix for Debian 12/13, Ubuntu 24.04/26.04, and Windows x64, including artifact signing and verification. The maintainer reports installation and functional testing on fresh VMs for all supported targets. The **v2.0.1 source** is prepared for an independent qualification run; existing v2.0.0 binaries and signatures are not reused. This is *release engineering evidence*, **not** independent security certification. See [VERIFICATION.md](VERIFICATION.md) for the scope and limits of testing, and [docs/ROADMAP.md](docs/ROADMAP.md) for ongoing development.
 
 ## Project history and license
 
