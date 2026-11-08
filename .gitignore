@@ -9,6 +9,9 @@
 /_CPack_Packages/
 /stage-*/
 /dist/
+/release-stage/
+/release-assets/
+/release-ready/
 /XORcist-2.0-Release/
 /vcpkg/
 /build-m0-corpus/
