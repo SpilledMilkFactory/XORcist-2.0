@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(XORcist VERSION 2.0.0 LANGUAGES CXX)
+project(XORcist VERSION 2.0.1 LANGUAGES CXX)
 include(cmake/dependencies.lock.cmake)
 
 # Normalize permissions of implicitly created directories even when the

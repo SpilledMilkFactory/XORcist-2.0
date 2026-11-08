@@ -14,7 +14,7 @@ XORcist **v2.0.0 was published** using the M4 cross-platform candidate and signi
 
 ## Version-driven package naming
 
-`CMakeLists.txt` is the authoritative project version. Before **v2.0.1**, update `project(XORcist VERSION 2.0.0 ...)` to `2.0.1` in a separate release-preparation commit, update the static README release badge SVG, and rerun the full candidate workflow on that exact commit. `scripts/package_candidate.py` and `scripts/assemble_release.py` derive their names and metadata from the CMake project version; no hard-coded M4 `2.0.0` candidate names remain.
+`CMakeLists.txt` is the authoritative project version and now declares **2.0.1**. Both `scripts/package_candidate.py` and `scripts/assemble_release.py` derive filenames and metadata from that declaration. The local README release badge is intentionally **version-neutral**: it links to the latest published GitHub release without claiming the release candidate is already public. Rerun the full candidate workflow on the exact approved release commit; never reuse a previous version's binaries or signatures.
 
 Debian CPack uses **no** forced release revision, yielding a package version of `2.0.1` and a native package filename `xorcist_2.0.1_amd64.deb`. The five top-level GitHub release files will be:
 
@@ -34,6 +34,12 @@ The `v2.0.0` release remains unchanged, including any existing `-1` Debian revis
 Each downloadable archive contains `RELEASE_MANIFEST.json` and `RELEASE_MANIFEST.json.sigstore.json`. The manifest lists the source revision, target platform, version, and SHA-256 digest of **every other included file**. Its signed bundle verifies the manifest itself. Signing this *internal* manifest rather than the outer archive avoids the impossible task of including a file's own signature inside its signed bytes.
 
 Linux archives additionally contain the signed `.deb`, signed SPDX file, runtime dependencies, and per-DEB checksum. The Windows ZIP directly contains `bin/` and `share/` plus the signed manifest and the source-candidate provenance record. The outer archive digest is verified against `SHA256SUMS` (which is not separately signed). This arrangement proves payload integrity and workflow origin after successful signature verification; it does not constitute an independent application security audit.
+
+Confirm the release workflow was triggered from `main` at the **same full Git commit** you intend to tag. In particular, do not tag a later commit just because its version is also `2.0.1`. To independently verify the six downloaded assets, use a checkout with the matching `CMakeLists.txt`:
+
+```bash
+python3 scripts/release_version.py      # 2.0.1
+```
 
 To download assets from the successful workflow:
 

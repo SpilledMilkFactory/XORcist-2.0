@@ -33,6 +33,15 @@ def main():
     check('assemble_release.py verify' in workflow and '--cosign' in workflow,
           'release manifest independent signature verification missing')
     check('name: xorcist-release-ready' in workflow, 'missing six-asset release upload')
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from release_version import project_version
+    version = project_version()
+    check(re.fullmatch(r'\d+\.\d+\.\d+', version) is not None, 'invalid project version')
+    from assemble_release import filename_for, PLATFORMS
+    names = [filename_for(version, platform) for platform in PLATFORMS]
+    check(len(names) == 5 and len(set(names)) == 5, 'release asset names not unique')
+    check(all(name.startswith(f'XORcist-{version}-') for name in names), 'release asset naming mismatch')
+    check(version in text(f'docs/releases/v{version}.md'), 'missing current-version release notes')
     check('CPACK_DEBIAN_PACKAGE_RELEASE "1"' not in text('CMakeLists.txt'),
           'Debian package must not force a -1 version suffix')
     candidate = text('scripts/package_candidate.py')

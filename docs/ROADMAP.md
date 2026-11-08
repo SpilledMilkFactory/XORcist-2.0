@@ -14,9 +14,9 @@ XORcist's goal is a small, cross-platform toolbox for **network planning, bounde
 
 The v2.0.0 packages were published after the maintainer's cross-platform VM validation. Test evidence and limitations are summarized in [`../VERIFICATION.md`](../VERIFICATION.md).
 
-## Planned v2.0.1 — GUI presentation
+## v2.0.1 — GUI presentation (release qualification pending)
 
-The `main` branch includes a new **12-tile Dear ImGui dashboard** with animated workspaces, unclipped labels, responsive tile columns, and expandable result areas. This update is intentionally limited to the presentation layer. Complete the UI acceptance checklist, increment version/package metadata, rerun the platform matrix and signing, then publish v2.0.1 from new artifacts.
+The v2.0.1 release-preparation source includes a **12-tile Dear ImGui dashboard** with animated workspaces, unclipped labels, responsive tile columns, and expandable result areas. This update is intentionally limited to the presentation layer. The project/package version is set to **2.0.1**; complete UI acceptance, rerun the platform matrix and signing on the exact release commit, and publish only newly qualified artifacts.
 
 Checklist: [`V2_0_1_UI_ACCEPTANCE.md`](V2_0_1_UI_ACCEPTANCE.md).
 

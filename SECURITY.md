@@ -10,7 +10,7 @@ Provide the affected version/commit, platform, reproducible steps, expected/obse
 
 ## Supported versions and scope
 
-The latest published release is **v2.0.0**; the `main` branch may contain unreleased changes. Security fixes, if needed, will be evaluated for the current release and development branch. Older versions are not guaranteed ongoing backports. Check [GitHub Releases](https://github.com/SpilledMilkFactory/XORcist-2.0/releases) for the latest version and security announcements.
+The latest publicly supported release is listed on [GitHub Releases](https://github.com/SpilledMilkFactory/XORcist-2.0/releases); the `main` branch may contain unreleased changes. Security fixes, if needed, will be evaluated for the current release and development branch. Older versions are not guaranteed ongoing backports. Check the release page for version and security announcements.
 
 XORcist is **not independently security-audited**, penetration-tested to a certification standard, or a replacement for a dedicated secret-management system. Automated tests, SBOMs, and signed builds do not constitute such a review.
 

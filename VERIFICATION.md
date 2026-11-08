@@ -32,11 +32,11 @@ Clang AddressSanitizer/UndefinedBehaviorSanitizer and bounded libFuzzer runs wer
 - Artifacts built for distinct Linux distributions are **not interchangeable**, even though their package names share a version.
 - Package signatures validate byte integrity and CI signing identity; they do **not** make the software independently audited or immune to future dependency vulnerabilities.
 
-## Current main — tile dashboard planned for v2.0.1
+## v2.0.1 release-preparation source — tile dashboard
 
-The 12-tile Dear ImGui dashboard is a **post-v2.0.0 source change**. The maintainer has visually reviewed the dashboard and Binary Data Tools workspace and reported smooth operation. It does **not** change the core, CLI, or `.xorc3` format.
+The 12-tile Dear ImGui dashboard is a **post-v2.0.0 source change**, now prepared for the **v2.0.1** release. The maintainer has visually reviewed the dashboard and Binary Data Tools workspace and reported smooth operation. It does **not** change the core, CLI, or `.xorc3` format.
 
-Before tagging v2.0.1, rerun a GUI-enabled CTest suite (expected **10/10** with Python 3), the GUI smoke test, targeted interactive checks from [`docs/V2_0_1_UI_ACCEPTANCE.md`](docs/V2_0_1_UI_ACCEPTANCE.md), and the full signed release-candidate workflow on the **exact v2.0.1 release commit**. Previous v2.0.0 binaries and signatures cannot be reused for a new version.
+Before tagging v2.0.1, rerun the GUI-enabled CTest suite (expected **11/11** with Python 3, including the release-asset regression), the GUI smoke test, targeted interactive checks from [`docs/V2_0_1_UI_ACCEPTANCE.md`](docs/V2_0_1_UI_ACCEPTANCE.md), and the full signed release-candidate workflow on the **exact v2.0.1 release commit**. Previous v2.0.0 binaries and signatures cannot be reused for a new version.
 
 ## Reproducing local checks
 
@@ -51,8 +51,8 @@ ctest --test-dir build-verify --output-on-failure
 
 On a headless Linux CI worker, run the GUI smoke test through an available display server (for example `xvfb-run`). The live build and packaging commands are also documented in the [README](README.md) and [release guide](docs/M4_RELEASE_GUIDE.md).
 
-## Unreleased v2.0.1 release-asset preparation
+## v2.0.1 release-preparation and asset qualification
 
 The release candidate workflow now stages five platform archives plus a single `SHA256SUMS` after the original M4 build/test/audit gates. Each archive holds a separately signed `RELEASE_MANIFEST.json` describing all payload hashes; an additional `verify --cosign` step checks the internal signer identity and revision before the CI release-ready artifact can be uploaded. Linux tarballs contain the native DEB and its verified SPDX/runtime metadata; Windows ZIP directly contains the runnable install tree.
 
-The new `xorcist_release_asset_tests` CTest uses **synthetic signatures** to test manifest coverage, archive names, checksums, tamper rejection, Windows extraction and six-file enumeration without any external network. Those dummy signatures **do not establish cryptographic validity**. The online CI signing/verification run is required for that. This packaging layout has not yet been qualified as a v2.0.1 release; the project version is intentionally still 2.0.0 until the release-preparation commit. Existing published v2.0.0 assets are unchanged.
+The new `xorcist_release_asset_tests` CTest uses **synthetic signatures** to test manifest coverage, archive names, checksums, tamper rejection, Windows extraction and six-file enumeration without any external network. Those dummy signatures **do not establish cryptographic validity**. The online CI signing/verification run is required for that. The CMake project version is now **2.0.1** for the release-preparation source. The platform build, independent Sigstore verification, installation tests, and public release remain **pending** until their new results are recorded. Existing published v2.0.0 assets are unchanged.
